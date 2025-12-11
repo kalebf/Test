@@ -9,7 +9,9 @@ export default function SettingsPage() {
   const [profile, setProfile] = useState({
     display_name: "",
     email: "",
-    user_type: ""
+    user_type: "",
+    first_name: "",
+    last_name: ""
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -29,12 +31,26 @@ export default function SettingsPage() {
     setLoading(true);
     try {
       const response = await authAPI.getProfile();
-      setProfile(response.data);
+      // Split display_name into first and last name
+      const displayName = response.data.display_name || "";
+      const nameParts = displayName.split(" ");
+      const firstName = nameParts[0] || "";
+      const lastName = nameParts.slice(1).join(" ") || "";
+      
+      setProfile({
+        display_name: response.data.display_name || "",
+        email: response.data.email || "",
+        user_type: response.data.user_type || "",
+        first_name: response.data.first_name || firstName,
+        last_name: response.data.last_name || lastName
+      });
       
       // Also store in sessionStorage
       sessionStorage.setItem("user_name", response.data.display_name);
       sessionStorage.setItem("user_email", response.data.email);
       sessionStorage.setItem("user_type", response.data.user_type);
+      sessionStorage.setItem("first_name", response.data.first_name || firstName);
+      sessionStorage.setItem("last_name", response.data.last_name || lastName);
     } catch (error) {
       console.error("Error loading profile:", error);
       setMessage({ 
@@ -52,7 +68,7 @@ export default function SettingsPage() {
     
     try {
       const response = await authAPI.updatePersonalProfile({
-        display_name: profile.display_name,
+        display_name: `${profile.first_name} ${profile.last_name}`.trim(),
         email: profile.email
       });
       
@@ -62,8 +78,10 @@ export default function SettingsPage() {
       });
       
       // Update sessionStorage
-      sessionStorage.setItem("user_name", profile.display_name);
+      sessionStorage.setItem("user_name", `${profile.first_name} ${profile.last_name}`.trim());
       sessionStorage.setItem("user_email", profile.email);
+      sessionStorage.setItem("first_name", profile.first_name);
+      sessionStorage.setItem("last_name", profile.last_name);
       
       // Reload profile
       setTimeout(() => loadProfile(), 1000);
@@ -131,13 +149,11 @@ export default function SettingsPage() {
     }
   };
 
-  const getInitials = (name) => {
-    if (!name) return "";
-    return name
-      .split(' ')
-      .map(word => word[0])
-      .join('')
-      .toUpperCase();
+  const getInitials = (firstName, lastName) => {
+    if (!firstName && !lastName) return "";
+    const firstInitial = firstName ? firstName[0] : "";
+    const lastInitial = lastName ? lastName[0] : "";
+    return (firstInitial + lastInitial).toUpperCase();
   };
 
   if (loading) {
@@ -207,15 +223,27 @@ export default function SettingsPage() {
                         <p className="text-gray-600 mb-6">Update your profile information</p>
 
                         <div className="space-y-6">
-                          <div>
-                            <label className="text-sm font-medium text-[#333333] mb-2 block">Full Name</label>
-                            <input
-                              type="text"
-                              value={profile.display_name}
-                              onChange={(e) => setProfile({...profile, display_name: e.target.value})}
-                              className="w-full px-4 py-2 border-2 border-[#86a59c] rounded-lg"
-                              disabled={saving}
-                            />
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="text-sm font-medium text-[#333333] mb-2 block">First Name</label>
+                              <input
+                                type="text"
+                                value={profile.first_name}
+                                onChange={(e) => setProfile({...profile, first_name: e.target.value})}
+                                className="w-full px-4 py-2 border-2 border-[#86a59c] rounded-lg"
+                                disabled={saving}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-sm font-medium text-[#333333] mb-2 block">Last Name</label>
+                              <input
+                                type="text"
+                                value={profile.last_name}
+                                onChange={(e) => setProfile({...profile, last_name: e.target.value})}
+                                className="w-full px-4 py-2 border-2 border-[#86a59c] rounded-lg"
+                                disabled={saving}
+                              />
+                            </div>
                           </div>
 
                           <div>
@@ -309,11 +337,11 @@ export default function SettingsPage() {
                 <div className="w-80 p-8 flex flex-col items-center">
                   <div className="w-32 h-32 rounded-full bg-[#89ce94] flex items-center justify-center mb-4">
                     <span className="text-4xl font-bold text-white">
-                      {getInitials(profile.display_name)}
+                      {getInitials(profile.first_name, profile.last_name)}
                     </span>
                   </div>
 
-                  <h3 className="text-xl font-bold mb-2">{profile.display_name || "User"}</h3>
+                  <h3 className="text-xl font-bold mb-2">{profile.first_name} {profile.last_name}</h3>
                   <p className="text-sm text-gray-600">{profile.email || "email@example.com"}</p>
                   <p className="text-xs text-gray-500 mt-2 capitalize">{profile.user_type?.replace('_', ' ')}</p>
                 </div>

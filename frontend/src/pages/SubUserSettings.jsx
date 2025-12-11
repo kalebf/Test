@@ -12,7 +12,9 @@ export default function SettingsPageSubUser() {
     business_name: '',
     display_name: '',
     email: '',
-    user_type: ''
+    user_type: '',
+    first_name: '',
+    last_name: ''
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -37,13 +39,25 @@ export default function SettingsPageSubUser() {
         return;
       }
       
-      setProfile(response.data);
+      // Split display_name into first and last name
+      const displayName = response.data.display_name || "";
+      const nameParts = displayName.split(" ");
+      const firstName = nameParts[0] || "";
+      const lastName = nameParts.slice(1).join(" ") || "";
+      
+      setProfile({
+        ...response.data,
+        first_name: response.data.first_name || firstName,
+        last_name: response.data.last_name || lastName
+      });
       
       // Store in sessionStorage
       sessionStorage.setItem("user_name", response.data.display_name);
       sessionStorage.setItem("user_email", response.data.email);
       sessionStorage.setItem("business_name", response.data.business_name);
       sessionStorage.setItem("user_type", response.data.user_type);
+      sessionStorage.setItem("first_name", response.data.first_name || firstName);
+      sessionStorage.setItem("last_name", response.data.last_name || lastName);
     } catch (error) {
       console.error("Error loading profile:", error);
       setMessage({ 
@@ -61,7 +75,7 @@ export default function SettingsPageSubUser() {
     
     try {
       const response = await authAPI.updateSubUserProfile({
-        display_name: profile.display_name,
+        display_name: `${profile.first_name} ${profile.last_name}`.trim(),
         email: profile.email
       });
       
@@ -71,8 +85,10 @@ export default function SettingsPageSubUser() {
       });
       
       // Update sessionStorage
-      sessionStorage.setItem("user_name", profile.display_name);
+      sessionStorage.setItem("user_name", `${profile.first_name} ${profile.last_name}`.trim());
       sessionStorage.setItem("user_email", profile.email);
+      sessionStorage.setItem("first_name", profile.first_name);
+      sessionStorage.setItem("last_name", profile.last_name);
       
       // Reload profile
       setTimeout(() => loadProfile(), 1000);
@@ -140,13 +156,11 @@ export default function SettingsPageSubUser() {
     }
   };
 
-  const getInitials = (name) => {
-    if (!name) return 'U';
-    return name
-      .split(' ')
-      .map(word => word[0])
-      .join('')
-      .toUpperCase();
+  const getInitials = (firstName, lastName) => {
+    if (!firstName && !lastName) return 'U';
+    const firstInitial = firstName ? firstName[0] : "";
+    const lastInitial = lastName ? lastName[0] : "";
+    return (firstInitial + lastInitial).toUpperCase();
   };
 
   const navItems = [
@@ -197,11 +211,11 @@ export default function SettingsPageSubUser() {
               border: '3px solid #6BB577'
             }}
           >
-            {getInitials(profile.display_name)}
+            {getInitials(profile.first_name, profile.last_name)}
           </div>
           {isExpanded && (
             <div className="ml-3">
-              <p className="text-sm font-medium text-white">{profile.display_name}</p>
+              <p className="text-sm font-medium text-white">{profile.first_name} {profile.last_name}</p>
               <p className="text-xs text-gray-300 opacity-80">Sub User</p>
             </div>
           )}
@@ -306,15 +320,27 @@ export default function SettingsPageSubUser() {
                               <p className="text-xs text-gray-500 mt-1">Business name cannot be changed by sub-users</p>
                             </div>
 
-                            <div>
-                              <label className="text-sm font-medium text-[#333333] mb-2 block">Full Name</label>
-                              <input
-                                type="text"
-                                value={profile.display_name}
-                                onChange={(e) => setProfile({...profile, display_name: e.target.value})}
-                                className="w-full px-4 py-2 border-2 border-[#86a59c] rounded-lg"
-                                disabled={saving}
-                              />
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="text-sm font-medium text-[#333333] mb-2 block">First Name</label>
+                                <input
+                                  type="text"
+                                  value={profile.first_name}
+                                  onChange={(e) => setProfile({...profile, first_name: e.target.value})}
+                                  className="w-full px-4 py-2 border-2 border-[#86a59c] rounded-lg"
+                                  disabled={saving}
+                                />
+                              </div>
+                              <div>
+                                <label className="text-sm font-medium text-[#333333] mb-2 block">Last Name</label>
+                                <input
+                                  type="text"
+                                  value={profile.last_name}
+                                  onChange={(e) => setProfile({...profile, last_name: e.target.value})}
+                                  className="w-full px-4 py-2 border-2 border-[#86a59c] rounded-lg"
+                                  disabled={saving}
+                                />
+                              </div>
                             </div>
 
                             <div>
@@ -409,7 +435,7 @@ export default function SettingsPageSubUser() {
                   <div className="flex flex-col items-center">
                     <div className="w-32 h-32 rounded-full bg-[#89ce94] flex items-center justify-center mb-4">
                       <span className="text-4xl font-bold text-white">
-                        {getInitials(profile.display_name)}
+                        {getInitials(profile.first_name, profile.last_name)}
                       </span>
                     </div>
 
@@ -418,7 +444,7 @@ export default function SettingsPageSubUser() {
                     </p>
 
                     <h3 className="text-xl font-bold text-[#333333] mb-2">
-                      {profile.display_name}
+                      {profile.first_name} {profile.last_name}
                     </h3>
 
                     <p className="text-sm text-gray-600">
