@@ -51,70 +51,43 @@ const BusinessGoals = () => {
   };
 
   // Check user type and load goals on component mount
-  useEffect(() => {
-    const userType = sessionStorage.getItem("user_type");
-    
-    // Redirect personal users away from this page
-    if (userType === "personal") {
-      navigate("/Dashboard");
-      return;
-    }
-    
-    // Load business goals from sessionStorage
-    const businessGoalsStr = sessionStorage.getItem("business_goals");
-    
-    if (businessGoalsStr) {
-      try {
-        const businessGoals = JSON.parse(businessGoalsStr);
-        if (Array.isArray(businessGoals) && businessGoals.length > 0) {
-          // Ensure each goal has a color
-          const goalsWithColors = businessGoals.map(goal => ({
-            ...goal,
-            color: goal.color || getDepartmentColor(goal.department)
-          }));
-          setGoals(goalsWithColors);
-        } else {
-          // If no goals in storage, start with an empty array
-          setGoals([]);
-        }
-      } catch (error) {
-        console.error("Error loading business goals from sessionStorage:", error);
-        setGoals([]);
-      }
-    } else {
-      // If no goals in storage, start with an empty array
-      setGoals([]);
-    }
-  }, [navigate]);
-
+useEffect(() => {
+  // Clear any old business goals when component loads
+  const currentUserEmail = sessionStorage.getItem("email");
+  const storedUserEmail = sessionStorage.getItem("business_goals_user");
+  
+  // If different user, clear old goals
+  if (storedUserEmail && storedUserEmail !== currentUserEmail) {
+    sessionStorage.removeItem("business_goals");
+  }
+  
+  // Store current user email with goals
+  if (currentUserEmail) {
+    sessionStorage.setItem("business_goals_user", currentUserEmail);
+  }
+  
+  const userType = sessionStorage.getItem("user_type");
+  
+  // ... rest of your existing code
+}, [navigate]);
   // Save business goals to sessionStorage whenever they change
   const saveGoalsToSessionStorage = (updatedGoals) => {
-    try {
-      sessionStorage.setItem("business_goals", JSON.stringify(updatedGoals));
-      window.dispatchEvent(new Event('storage'));
-    } catch (error) {
-      console.error("Error saving business goals to sessionStorage:", error);
-    }
-  };
-
-  const addNewGoal = () => {
-    if (newGoal.name && newGoal.amount && newGoal.department) {
-      const newGoalObj = {
-        name: newGoal.name,
-        target: parseFloat(newGoal.amount),
-        current: 0,
-        department: newGoal.department,
-        color: getDepartmentColor(newGoal.department),
+  try {
+    const currentUserEmail = sessionStorage.getItem("email");
+    if (currentUserEmail) {
+      // Store goals with user identifier
+      const goalsData = {
+        userEmail: currentUserEmail,
+        goals: updatedGoals,
+        timestamp: new Date().toISOString()
       };
-      
-      const updatedGoals = [...goals, newGoalObj];
-      setGoals(updatedGoals);
-      saveGoalsToSessionStorage(updatedGoals);
-      setNewGoal({ name: "", amount: "", department: "" });
-      setShowAddGoal(false);
+      sessionStorage.setItem("business_goals", JSON.stringify(goalsData));
+      window.dispatchEvent(new Event('storage'));
     }
-  };
-
+  } catch (error) {
+    console.error("Error saving business goals:", error);
+  }
+};
   const updateGoal = () => {
     if (editGoalIndex !== null) {
       const updated = [...goals];

@@ -17,16 +17,25 @@ def get_db():
         db.close()
 
 
-# CREATE GOAL
+# GET ALL GOALS - UPDATED to only show current user's goals
+@router.get("/", response_model=list[GoalOut])
+def get_goals(
+    user: User = Depends(verify_token),
+    db: Session = Depends(get_db)
+):
+    # Only return goals for the current logged-in user
+    return db.query(Goal).filter(Goal.user_id == user.id).all()
+
+
+# CREATE GOAL - Already correctly sets user_id
 @router.post("/", response_model=GoalOut)
 def create_goal(
     payload: GoalCreate,
     user: User = Depends(verify_token),
     db: Session = Depends(get_db)
 ):
-
     new_goal = Goal(
-        user_id=user.id,
+        user_id=user.id,  # This ensures goal is created for current user
         name=payload.name,
         type=payload.type,
         target_amount=payload.target_amount,
@@ -34,23 +43,14 @@ def create_goal(
         target_date=payload.target_date,
         status="on_track"
     )
-
+    
     db.add(new_goal)
     db.commit()
     db.refresh(new_goal)
     return new_goal
 
 
-# GET ALL GOALS
-@router.get("/", response_model=list[GoalOut])
-def get_goals(
-    user: User = Depends(verify_token),
-    db: Session = Depends(get_db)
-):
-    return db.query(Goal).filter(Goal.user_id == user.id).all()
-
-
-# UPDATE GOAL
+# UPDATE GOAL - Already checks user ownership
 @router.put("/{goal_id}", response_model=GoalOut)
 def update_goal(
     goal_id: int,
@@ -58,7 +58,6 @@ def update_goal(
     user: User = Depends(verify_token),
     db: Session = Depends(get_db)
 ):
-
     goal = db.query(Goal).filter(Goal.id == goal_id, Goal.user_id == user.id).first()
     
     if not goal:
@@ -81,14 +80,13 @@ def update_goal(
     return goal
 
 
-# DELETE GOAL
+# DELETE GOAL - Already checks user ownership
 @router.delete("/{goal_id}")
 def delete_goal(
     goal_id: int,
     user: User = Depends(verify_token),
     db: Session = Depends(get_db)
 ):
-
     goal = db.query(Goal).filter(Goal.id == goal_id, Goal.user_id == user.id).first()
 
     if not goal:

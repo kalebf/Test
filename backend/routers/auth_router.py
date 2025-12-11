@@ -451,3 +451,18 @@ def debug_roles(db: Session = Depends(get_db)):
     """Debug endpoint to check roles in database"""
     roles = db.query(Role).all()
     return {"roles": [{"id": r.id, "role_name": r.role_name, "permission_level": r.permission_level} for r in roles]}
+
+@router.post("/logout")
+def logout(
+    user: User = Depends(verify_token),
+    db: Session = Depends(get_db)
+):
+    """Logout user by updating last login time (optional) and clearing token client-side"""
+    
+    # You could update last_logout time if you have that field
+    # For now, just return success - token invalidation is handled client-side
+    
+    return {
+        "message": "Successfully logged out",
+        "success": True
+    }

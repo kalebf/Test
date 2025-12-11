@@ -29,81 +29,120 @@ export default function SettingsPageBusiness() {
     loadProfile();
   }, []);
 
-  const loadProfile = async () => {
-    setLoading(true);
-    try {
-      const response = await authAPI.getProfile();
-      if (response.data.user_type !== 'business_admin') {
-        navigate('/Dashboard');
-        return;
-      }
-      
-      // Split display_name into first and last name
-      const displayName = response.data.display_name || "";
-      const nameParts = displayName.split(" ");
-      const firstName = nameParts[0] || "";
-      const lastName = nameParts.slice(1).join(" ") || "";
-      
-      setProfile({
-        ...response.data,
-        first_name: response.data.first_name || firstName,
-        last_name: response.data.last_name || lastName
-      });
-      
-      // Store in sessionStorage
-      sessionStorage.setItem("user_name", response.data.display_name);
-      sessionStorage.setItem("user_email", response.data.email);
-      sessionStorage.setItem("business_name", response.data.business_name);
-      sessionStorage.setItem("user_type", response.data.user_type);
-      sessionStorage.setItem("first_name", response.data.first_name || firstName);
-      sessionStorage.setItem("last_name", response.data.last_name || lastName);
-    } catch (error) {
-      console.error("Error loading profile:", error);
-      setMessage({ 
-        text: error.response?.data?.detail || "Failed to load profile", 
-        type: 'error' 
-      });
-    } finally {
-      setLoading(false);
+ const loadProfile = async () => {
+  setLoading(true);
+  try {
+    const response = await authAPI.getProfile();
+    if (response.data.user_type !== 'business_admin') {
+      navigate('/Dashboard');
+      return;
     }
-  };
+    
+    // Split display_name into first and last name
+    const displayName = response.data.display_name || "";
+    const nameParts = displayName.split(" ");
+    const firstName = nameParts[0] || "";
+    const lastName = nameParts.slice(1).join(" ") || "";
+    
+    setProfile({
+      ...response.data,
+      first_name: response.data.first_name || firstName,
+      last_name: response.data.last_name || lastName
+    });
+    
+    // Store ALL user data in sessionStorage with consistent keys
+    const userData = {
+      name: response.data.display_name,
+      email: response.data.email,
+      business_name: response.data.business_name,
+      user_type: response.data.user_type,
+      first_name: response.data.first_name || firstName,
+      last_name: response.data.last_name || lastName
+    };
+
+    // Clear sessionStorage first
+    sessionStorage.clear();
+
+    // Store all data
+    Object.entries(userData).forEach(([key, value]) => {
+      if (value) {
+        sessionStorage.setItem(key, value);
+        console.log(`BusinessSettings - Stored ${key}: ${value}`);
+      }
+    });
+
+    // Clear localStorage except access token
+    const accessToken = localStorage.getItem("access_token");
+    const refreshToken = localStorage.getItem("refresh_token");
+    localStorage.clear();
+    if (accessToken) localStorage.setItem("access_token", accessToken);
+    if (refreshToken) localStorage.setItem("refresh_token", refreshToken);
+
+    // Dispatch event to notify NavBars
+    window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new CustomEvent('profileUpdated'));
+    
+  } catch (error) {
+    console.error("Error loading profile:", error);
+    setMessage({ 
+      text: error.response?.data?.detail || "Failed to load profile", 
+      type: 'error' 
+    });
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleSaveProfile = async () => {
-    setSaving(true);
-    setMessage({ text: '', type: '' });
+  setSaving(true);
+  setMessage({ text: '', type: '' });
+  
+  try {
+    const response = await authAPI.updateBusinessProfile({
+      business_name: profile.business_name,
+      display_name: `${profile.first_name} ${profile.last_name}`.trim(),
+      email: profile.email
+    });
     
-    try {
-      const response = await authAPI.updateBusinessProfile({
-        business_name: profile.business_name,
-        display_name: `${profile.first_name} ${profile.last_name}`.trim(),
-        email: profile.email
-      });
-      
-      setMessage({ 
-        text: response.data.message || "Profile updated successfully", 
-        type: 'success' 
-      });
-      
-      // Update sessionStorage
-      sessionStorage.setItem("user_name", `${profile.first_name} ${profile.last_name}`.trim());
-      sessionStorage.setItem("user_email", profile.email);
-      sessionStorage.setItem("business_name", profile.business_name);
-      sessionStorage.setItem("first_name", profile.first_name);
-      sessionStorage.setItem("last_name", profile.last_name);
-      
-      // Reload profile
-      setTimeout(() => loadProfile(), 1000);
-    } catch (error) {
-      console.error("Error updating profile:", error);
-      setMessage({ 
-        text: error.response?.data?.detail || "Failed to update profile", 
-        type: 'error' 
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
+    setMessage({ 
+      text: response.data.message || "Profile updated successfully", 
+      type: 'success' 
+    });
+    
+    // Update sessionStorage with consistent keys
+    const updatedName = `${profile.first_name} ${profile.last_name}`.trim();
+    const userData = {
+      name: updatedName,
+      email: profile.email,
+      business_name: profile.business_name,
+      first_name: profile.first_name,
+      last_name: profile.last_name,
+      user_type: 'business_admin'
+    };
 
+    Object.entries(userData).forEach(([key, value]) => {
+      if (value) {
+        sessionStorage.setItem(key, value);
+        console.log(`BusinessSettings - Updated ${key}: ${value}`);
+      }
+    });
+
+    // Dispatch events to update NavBars
+    window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new CustomEvent('profileUpdated'));
+    
+    // Reload profile
+    setTimeout(() => loadProfile(), 1000);
+  } catch (error) {
+    console.error("Error updating profile:", error);
+    setMessage({ 
+      text: error.response?.data?.detail || "Failed to update profile", 
+      type: 'error' 
+    });
+  } finally {
+    setSaving(false);
+  }
+};
   const validatePassword = (password) => {
     const hasMinLength = password.length >= 9;
     const hasNumber = /\d/.test(password);

@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { authAPI } from '../services/api';
+import SubUserNavBar from './SubUserNavBar';
 
 export default function SettingsPageSubUser() {
   const [activeTab, setActiveTab] = useState('edit-profile');
-  const [isExpanded, setIsExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   
@@ -30,78 +30,119 @@ export default function SettingsPageSubUser() {
     loadProfile();
   }, []);
 
-  const loadProfile = async () => {
-    setLoading(true);
-    try {
-      const response = await authAPI.getProfile();
-      if (response.data.user_type !== 'business_subuser') {
-        navigate('/Dashboard');
-        return;
-      }
-      
-      // Split display_name into first and last name
-      const displayName = response.data.display_name || "";
-      const nameParts = displayName.split(" ");
-      const firstName = nameParts[0] || "";
-      const lastName = nameParts.slice(1).join(" ") || "";
-      
-      setProfile({
-        ...response.data,
-        first_name: response.data.first_name || firstName,
-        last_name: response.data.last_name || lastName
-      });
-      
-      // Store in sessionStorage
-      sessionStorage.setItem("user_name", response.data.display_name);
-      sessionStorage.setItem("user_email", response.data.email);
-      sessionStorage.setItem("business_name", response.data.business_name);
-      sessionStorage.setItem("user_type", response.data.user_type);
-      sessionStorage.setItem("first_name", response.data.first_name || firstName);
-      sessionStorage.setItem("last_name", response.data.last_name || lastName);
-    } catch (error) {
-      console.error("Error loading profile:", error);
-      setMessage({ 
-        text: error.response?.data?.detail || "Failed to load profile", 
-        type: 'error' 
-      });
-    } finally {
-      setLoading(false);
+ const loadProfile = async () => {
+  setLoading(true);
+  try {
+    const response = await authAPI.getProfile();
+    if (response.data.user_type !== 'business_subuser') {
+      navigate('/Dashboard');
+      return;
     }
-  };
+    
+    // Split display_name into first and last name
+    const displayName = response.data.display_name || "";
+    const nameParts = displayName.split(" ");
+    const firstName = nameParts[0] || "";
+    const lastName = nameParts.slice(1).join(" ") || "";
+    
+    setProfile({
+      ...response.data,
+      first_name: response.data.first_name || firstName,
+      last_name: response.data.last_name || lastName
+    });
+    
+    // Store ALL user data in sessionStorage with consistent keys
+    const userData = {
+      name: response.data.display_name,
+      email: response.data.email,
+      business_name: response.data.business_name,
+      user_type: response.data.user_type,
+      first_name: response.data.first_name || firstName,
+      last_name: response.data.last_name || lastName
+    };
+
+    // Clear sessionStorage first
+    sessionStorage.clear();
+
+    // Store all data
+    Object.entries(userData).forEach(([key, value]) => {
+      if (value) {
+        sessionStorage.setItem(key, value);
+        console.log(`SubUserSettings - Stored ${key}: ${value}`);
+      }
+    });
+
+    // Clear localStorage except tokens
+    const accessToken = localStorage.getItem("access_token");
+    const refreshToken = localStorage.getItem("refresh_token");
+    localStorage.clear();
+    if (accessToken) localStorage.setItem("access_token", accessToken);
+    if (refreshToken) localStorage.setItem("refresh_token", refreshToken);
+
+    // Dispatch events
+    window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new CustomEvent('profileUpdated'));
+    
+  } catch (error) {
+    console.error("Error loading profile:", error);
+    setMessage({ 
+      text: error.response?.data?.detail || "Failed to load profile", 
+      type: 'error' 
+    });
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleSaveProfile = async () => {
-    setSaving(true);
-    setMessage({ text: '', type: '' });
+  setSaving(true);
+  setMessage({ text: '', type: '' });
+  
+  try {
+    const response = await authAPI.updateSubUserProfile({
+      display_name: `${profile.first_name} ${profile.last_name}`.trim(),
+      email: profile.email
+    });
     
-    try {
-      const response = await authAPI.updateSubUserProfile({
-        display_name: `${profile.first_name} ${profile.last_name}`.trim(),
-        email: profile.email
-      });
-      
-      setMessage({ 
-        text: response.data.message || "Profile updated successfully", 
-        type: 'success' 
-      });
-      
-      // Update sessionStorage
-      sessionStorage.setItem("user_name", `${profile.first_name} ${profile.last_name}`.trim());
-      sessionStorage.setItem("user_email", profile.email);
-      sessionStorage.setItem("first_name", profile.first_name);
-      sessionStorage.setItem("last_name", profile.last_name);
-      
-      // Reload profile
-      setTimeout(() => loadProfile(), 1000);
-    } catch (error) {
-      console.error("Error updating profile:", error);
-      setMessage({ 
-        text: error.response?.data?.detail || "Failed to update profile", 
-        type: 'error' 
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
+    setMessage({ 
+      text: response.data.message || "Profile updated successfully", 
+      type: 'success' 
+    });
+    
+    // Update sessionStorage with consistent keys
+    const updatedName = `${profile.first_name} ${profile.last_name}`.trim();
+    const userData = {
+      name: updatedName,
+      email: profile.email,
+      business_name: profile.business_name,
+      first_name: profile.first_name,
+      last_name: profile.last_name,
+      user_type: 'business_subuser'
+    };
+
+    Object.entries(userData).forEach(([key, value]) => {
+      if (value) {
+        sessionStorage.setItem(key, value);
+        console.log(`SubUserSettings - Updated ${key}: ${value}`);
+      }
+    });
+
+    // Dispatch events
+    window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new CustomEvent('profileUpdated'));
+    
+    // Reload profile
+    setTimeout(() => loadProfile(), 1000);
+  } catch (error) {
+    console.error("Error updating profile:", error);
+    setMessage({ 
+      text: error.response?.data?.detail || "Failed to update profile", 
+      type: 'error' 
+    });
+  } finally {
+    setSaving(false);
+  }
+};
 
   const validatePassword = (password) => {
     const hasMinLength = password.length >= 9;
@@ -171,17 +212,7 @@ export default function SettingsPageSubUser() {
   if (loading) {
     return (
       <div className="flex min-h-screen bg-gray-50" style={{ backgroundColor: '#E0E0E0' }}>
-        <aside 
-          className={`flex flex-col items-center text-white h-screen transition-all duration-300 ${
-            isExpanded ? 'w-64' : 'w-20'
-          }`}
-          style={{
-            backgroundColor: "#174D1F",
-            boxShadow: "4px 0 12px rgba(0, 0, 0, 0.15)",
-          }}
-        >
-          {/* Sidebar skeleton */}
-        </aside>
+        <SubUserNavBar />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-gray-600">Loading profile...</div>
         </div>
@@ -191,76 +222,8 @@ export default function SettingsPageSubUser() {
 
   return (
     <div className="flex min-h-screen bg-gray-50" style={{ backgroundColor: '#E0E0E0' }}>
-      {/* Sidebar */}
-      <aside 
-        className={`flex flex-col items-center text-white h-screen transition-all duration-300 ${
-          isExpanded ? 'w-64' : 'w-20'
-        }`}
-        style={{
-          backgroundColor: '#174D1F',
-          boxShadow: '4px 0 12px rgba(0, 0, 0, 0.15)'
-        }}
-        onMouseEnter={() => setIsExpanded(true)}
-        onMouseLeave={() => setIsExpanded(false)}
-      >
-        <div className="h-20 flex items-center w-full justify-center px-4 mb-2">
-          <div 
-            className="h-12 w-12 rounded-full bg-white flex items-center justify-center text-gray-700 font-bold flex-shrink-0 text-lg"
-            style={{
-              boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
-              border: '3px solid #6BB577'
-            }}
-          >
-            {getInitials(profile.first_name, profile.last_name)}
-          </div>
-          {isExpanded && (
-            <div className="ml-3">
-              <p className="text-sm font-medium text-white">{profile.first_name} {profile.last_name}</p>
-              <p className="text-xs text-gray-300 opacity-80">Sub User</p>
-            </div>
-          )}
-        </div>
-
-        <nav className="flex-1 w-full px-2">
-          <ul className="space-y-2">
-            <li>
-              <Link 
-                to="/SubUserDash" 
-                className="flex items-center px-4 py-3 rounded-lg transition-all duration-200 hover:bg-green-600 hover:bg-opacity-20"
-              >
-                <svg className="h-6 w-6 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                </svg>
-                {isExpanded && <span className="ml-4 text-sm font-medium whitespace-nowrap">Dashboard</span>}
-              </Link>
-            </li>
-          </ul>
-        </nav>
-
-        <div className="h-24 flex items-center justify-center w-full px-4">
-          <img
-            src={isExpanded ? "/ClariFi-Logo.png" : "/ClariFi-Logo-Small.png"}
-            alt="Logo"
-            className={`object-contain transition-all duration-300 ${
-              isExpanded ? 'h-12 w-auto' : 'h-14 w-14'
-            }`}
-            style={{ filter: 'drop-shadow(0 3px 6px rgba(0, 0, 0, 0.25))' }}
-          />
-        </div>
-
-        <div className="w-full px-2 pb-4 border-t border-white border-opacity-20 pt-2">
-          <Link 
-            to="/SubUserSettings" 
-            className="flex items-center px-4 py-3 rounded-lg transition-all duration-200 hover:bg-green-600 hover:bg-opacity-20"
-          >
-            <svg className="h-6 w-6 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="3"></circle>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-            </svg>
-            {isExpanded && <span className="ml-4 text-sm font-medium whitespace-nowrap">Settings</span>}
-          </Link>
-        </div>
-      </aside>
+      {/* Use SubUserNavBar */}
+      <SubUserNavBar />
 
       <div className="flex-1 w-full">
         <div className="p-8 h-screen flex flex-col relative">

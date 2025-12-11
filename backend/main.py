@@ -21,8 +21,7 @@ from models.transactions import Transaction
 from models.budgets import Budget
 from models.budget_entries import BudgetEntry
 from models.llmlogs import LLMLog
-
-
+from routers.dashboard_router import router as dashboard_router
 app = FastAPI(title="ClariFi API", version="1.0.0")
 
 
@@ -47,7 +46,7 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(goals_router)   
-
+app.include_router(dashboard_router)
 
 @app.get("/")
 def root():

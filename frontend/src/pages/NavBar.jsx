@@ -1,33 +1,68 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { logoutUser } from "../utils/logout";
 
 export default function NavBar() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [userInitials, setUserInitials] = useState("U");
   const [userType, setUserType] = useState("");
+  const [userName, setUserName] = useState("");
+  const [businessName, setBusinessName] = useState("");
   const location = useLocation();
   const navigate = useNavigate();
 
   useEffect(() => {
-    const userName = sessionStorage.getItem("user_name");
-    const userTypeFromStorage = sessionStorage.getItem("user_type");
+    const loadUserData = () => {
+      // Get data from sessionStorage ONLY (single source of truth)
+      const name = sessionStorage.getItem("name") || "";
+      const type = sessionStorage.getItem("user_type") || "";
+      const business = sessionStorage.getItem("business_name") || "";
+      
+      console.log("NavBar - Loading:", { name, type, business });
 
-    if (userName) {
-      const initials = userName
-        .split(" ")
-        .map((word) => word[0])
-        .join("")
-        .toUpperCase();
-      setUserInitials(initials);
-    }
+      if (name) {
+        setUserName(name);
+        const initials = name
+          .split(" ")
+          .map((word) => word[0])
+          .join("")
+          .toUpperCase();
+        setUserInitials(initials);
+      } else {
+        setUserName("");
+        setUserInitials("U");
+      }
 
-    if (userTypeFromStorage) {
-      setUserType(userTypeFromStorage);
-    }
-  }, []);
+      setUserType(type);
+      setBusinessName(business);
+    };
+
+    // Load immediately
+    loadUserData();
+    
+    // Listen for updates
+    const handleStorageChange = () => {
+      console.log("NavBar - Storage change detected");
+      loadUserData();
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('profileUpdated', handleStorageChange);
+    window.addEventListener('userDataInitialized', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('profileUpdated', handleStorageChange);
+      window.removeEventListener('userDataInitialized', handleStorageChange);
+    };
+  }, [location.pathname]);
 
   const isActive = (path) => {
     return location.pathname === path;
+  };
+
+  const handleLogout = async () => {
+    await logoutUser();
   };
 
   // Define navigation items based on user type
@@ -114,7 +149,7 @@ export default function NavBar() {
 
   // If sub-user, don't render this navbar
   if (userType === "business_subuser") {
-    return null; // Sub-user should use SubUserNavBar
+    return null;
   }
 
   return (
@@ -129,10 +164,10 @@ export default function NavBar() {
       onMouseEnter={() => setIsExpanded(true)}
       onMouseLeave={() => setIsExpanded(false)}
     >
-      {/* Profile Circle */}
-      <div className="h-20 flex items-center w-full justify-center px-4 mb-2">
+      {/* Profile Circle with Name */}
+      <div className="h-24 flex flex-col items-center w-full justify-center px-4 mb-2">
         <div
-          className="h-12 w-12 rounded-full bg-white flex items-center justify-center text-gray-700 font-bold flex-shrink-0 text-lg"
+          className="h-12 w-12 rounded-full bg-white flex items-center justify-center text-gray-700 font-bold flex-shrink-0 text-lg mb-2"
           style={{
             boxShadow: "0 4px 8px rgba(0, 0, 0, 0.2)",
             border: "3px solid #6BB577",
@@ -140,6 +175,22 @@ export default function NavBar() {
         >
           {userInitials}
         </div>
+        {isExpanded && userName && (
+          <div className="text-center">
+            <p className="text-sm font-medium text-white truncate max-w-full">
+              {userName}
+            </p>
+            {userType === "business_admin" && businessName && (
+              <p className="text-xs text-gray-300 truncate max-w-full">
+                {businessName}
+              </p>
+            )}
+            <p className="text-xs text-gray-300">
+              {userType === "business_admin" ? "Business Admin" : 
+               userType === "business_subuser" ? "Sub-user" : "Personal User"}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Navigation */}
@@ -182,22 +233,9 @@ export default function NavBar() {
         </ul>
       </nav>
 
-      {/* Logo Section */}
-      <div className="h-24 flex items-center justify-center w-full px-4">
-        <img
-          src={isExpanded ? "/ClariFi-Logo.png" : "/ClariFi-Logo-Small.png"}
-          alt="Logo"
-          className={`object-contain transition-all duration-300 ${
-            isExpanded ? "h-12 w-auto" : "h-14 w-14"
-          }`}
-          style={{
-            filter: "drop-shadow(0 3px 6px rgba(0, 0, 0, 0.25))",
-          }}
-        />
-      </div>
-
-      {/* Settings */}
-      <div className="w-full px-2 pb-4 border-t border-white border-opacity-20 pt-2">
+      {/* Settings and Logout */}
+      <div className="w-full px-2 pb-4 border-t border-white border-opacity-20 pt-2 space-y-2">
+        {/* Settings Button */}
         <button
           onClick={handleSettingsClick}
           className={`flex items-center w-full px-4 py-3 rounded-lg transition-all duration-200 text-left ${
@@ -254,6 +292,50 @@ export default function NavBar() {
             </span>
           )}
         </button>
+
+        {/* Logout Button */}
+        <button
+          onClick={handleLogout}
+          className="flex items-center w-full px-4 py-3 rounded-lg transition-all duration-200 text-left hover:bg-red-600 hover:bg-opacity-30"
+        >
+          <div className="transition-transform duration-200">
+            <svg
+              className="h-6 w-6 flex-shrink-0"
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+          </div>
+          {isExpanded && (
+            <span className="ml-4 text-sm font-medium whitespace-nowrap">
+              Logout
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Logo Section */}
+      <div className="h-24 flex items-center justify-center w-full px-4">
+        <img
+          src={isExpanded ? "/ClariFi-Logo.png" : "/ClariFi-Logo-Small.png"}
+          alt="Logo"
+          className={`object-contain transition-all duration-300 ${
+            isExpanded ? "h-12 w-auto" : "h-14 w-14"
+          }`}
+          style={{
+            filter: "drop-shadow(0 3px 6px rgba(0, 0, 0, 0.25))",
+          }}
+        />
       </div>
     </aside>
   );

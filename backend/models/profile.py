@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Boolean, ForeignKey
+from sqlalchemy.orm import relationship
 from database.connection import Base
 
 class Profile(Base):
@@ -9,3 +10,6 @@ class Profile(Base):
     display_name = Column(String)
     is_business = Column(Boolean, default=False)
     business_name = Column(String)
+    
+    # Relationship
+    user = relationship("User", back_populates="profile")

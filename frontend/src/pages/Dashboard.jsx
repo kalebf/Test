@@ -1,63 +1,100 @@
 import { useState, useEffect } from "react";
 import NavBar from "./NavBar";
 import PlotlyPersonal from "./PlotlyPersonal";
+import axios from "axios";
+
+// Add this at the top of your Dashboard component
+const API_BASE_URL = "http://localhost:8000"; // Adjust as needed
 
 export default function Dashboard() {
   const [hoveredCategoryIndex, setHoveredCategoryIndex] = useState(null);
-
-  // State for dashboard data
   const [recentPurchases, setRecentPurchases] = useState([]);
   const [expenseCategories, setExpenseCategories] = useState([]);
   const [goals, setGoals] = useState([]);
   const [userName, setUserName] = useState("");
   const [loading, setLoading] = useState(true);
 
+  // Function to get auth token
+  const getAuthToken = () => {
+    return localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
+  };
+
+  // API call to fetch dashboard data
+  const fetchDashboardData = async () => {
+    setLoading(true);
+    try {
+      const token = getAuthToken();
+      if (!token) {
+        console.error("No authentication token found");
+        return;
+      }
+
+      // Fetch all dashboard data at once
+      const response = await axios.get(`${API_BASE_URL}/dashboard/summary`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      const data = response.data;
+      
+      // Update state with real data
+      setRecentPurchases(data.recent_purchases || []);
+      setExpenseCategories(data.expense_categories || []);
+      setGoals(data.goals || []);
+      
+      // Set user name from API response or session storage
+      const nameFromAPI = data.user_name || "";
+      const nameFromStorage = sessionStorage.getItem("name") || "";
+      setUserName(nameFromAPI || nameFromStorage);
+      
+      // Also save to sessionStorage for persistence
+      sessionStorage.setItem("dashboard_data", JSON.stringify({
+        recentPurchases: data.recent_purchases || [],
+        expenseCategories: data.expense_categories || [],
+        goals: data.goals || []
+      }));
+      
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error);
+      // Fallback to sessionStorage if API fails
+      const dashboardDataStr = sessionStorage.getItem("dashboard_data");
+      if (dashboardDataStr) {
+        const dashboardData = JSON.parse(dashboardDataStr);
+        setRecentPurchases(dashboardData.recentPurchases || []);
+        setExpenseCategories(dashboardData.expenseCategories || []);
+        setGoals(dashboardData.goals || []);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Load data on component mount
   useEffect(() => {
-    const loadDashboardData = async () => {
-      setLoading(true);
-      try {
-        // Try to get from sessionStorage first
-        const dashboardDataStr = sessionStorage.getItem("dashboard_data");
-        const storedName = sessionStorage.getItem("user_name");
-
-        if (storedName) {
-          setUserName(storedName);
-        }
-
-        if (dashboardDataStr) {
-          // Use sessionStorage data if available
-          const dashboardData = JSON.parse(dashboardDataStr);
-          setRecentPurchases(dashboardData.recentPurchases || []);
-          setExpenseCategories(dashboardData.expenseCategories || []);
-          setGoals(dashboardData.goals || []);
-        } else {
-          // Fetch from API if no sessionStorage data
-          // Replace with your actual API call
-          // const response = await api.get('/dashboard-data');
-          // const data = response.data;
-          // setRecentPurchases(data.recentPurchases);
-          // setExpenseCategories(data.expenseCategories);
-          // setGoals(data.goals);
-
-          // For now, initialize with empty arrays
-          setRecentPurchases([]);
-          setExpenseCategories([]);
-          setGoals([]);
-        }
-      } catch (error) {
-        console.error("Error loading dashboard data:", error);
-        // Initialize with empty arrays on error
-        setRecentPurchases([]);
-        setExpenseCategories([]);
-        setGoals([]);
-      } finally {
-        setLoading(false);
-      }
+    fetchDashboardData();
+    
+    // Set up polling to refresh data every 30 seconds
+    const intervalId = setInterval(fetchDashboardData, 30000);
+    
+    // Listen for storage events to refresh data
+    const handleStorageChange = () => {
+      fetchDashboardData();
     };
-
-    loadDashboardData();
+    
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('profileUpdated', handleStorageChange);
+    window.addEventListener('userDataInitialized', handleStorageChange);
+    
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('profileUpdated', handleStorageChange);
+      window.removeEventListener('userDataInitialized', handleStorageChange);
+    };
   }, []);
+  
+  // ... rest of your Dashboard.jsx code remains the same ...
 
   const cardShadow = {
     boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.08)",
