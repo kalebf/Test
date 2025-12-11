@@ -16,7 +16,11 @@ from models.auth import AuthCredentials
 from models.profile import Profile
 from models.business import Business
 from models.role import Role
-
+from models.categories import Category
+from models.transactions import Transaction
+from models.budgets import Budget
+from models.budget_entries import BudgetEntry
+from models.llmlogs import LLMLog
 
 
 app = FastAPI(title="ClariFi API", version="1.0.0")

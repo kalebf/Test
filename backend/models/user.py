@@ -23,4 +23,8 @@ class User(Base):
     )
 
     goals = relationship("Goal", back_populates="user")
+    transactions = relationship("Transaction", back_populates="user")
+budgets = relationship("Budget", back_populates="user")
+budget_entries = relationship("BudgetEntry", back_populates="user")
+llm_logs = relationship("LLMLog", back_populates="user")
 
