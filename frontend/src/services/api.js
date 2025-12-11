@@ -17,28 +17,37 @@ export const authAPI = {
   // Login - expects object with email and password
   login: (data) => API.post("/auth/login", data),
 
-  // Register Personal - expects object with firstname, lastname, email, password
+  // Register Personal
   registerPersonal: (data) => API.post("/auth/register/personal", data),
 
-  // Register Business Admin - expects object with fullname, businessname, email, password
+  // Register Business Admin
   registerBusinessAdmin: (data) => API.post("/auth/register/business_admin", data),
 
-  // Register Business Subuser - expects object with fullname, businessemail, email, password
+  // Register Business Subuser
   registerBusinessSub: (data) => API.post("/auth/register/business_subuser", data),
-  
+
   getProfile: () => API.get("/auth/profile"),
-  
+
   updatePersonalProfile: (data) => API.put("/auth/profile/personal", data),
-  
+
   updateBusinessProfile: (data) => API.put("/auth/profile/business", data),
-  
+
   updateSubUserProfile: (data) => API.put("/auth/profile/subuser", data),
-  
+
   changePassword: (data) => API.put("/auth/change-password", data),
-  
+
   debugHeaders: () => API.get("/auth/debug-headers"),
 };
 
+
+export const goalsAPI = {
+  getGoals: () => API.get("/goals"),
+  createGoal: (data) => API.post("/goals", data),
+  updateGoal: (id, data) => API.put(`/goals/${id}`, data),
+  deleteGoal: (id) => API.delete(`/goals/${id}`),
+};
+
 export default {
-  authAPI
+  authAPI,
+  goalsAPI,
 };
