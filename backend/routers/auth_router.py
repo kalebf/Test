@@ -11,6 +11,7 @@ from schemas.auth_schema import *
 from core.security import hash_password, verify_password, create_access_token
 from core.config import settings
 from jose import jwt, JWTError
+import re 
 
 from datetime import datetime
 
@@ -284,10 +285,26 @@ def get_profile(user: User = Depends(verify_token), db: Session = Depends(get_db
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
     
+    # Split display_name into first and last name
+    display_name = profile.display_name or ""
+    name_parts = display_name.split()
+    
+    if len(name_parts) >= 2:
+        first_name = name_parts[0]
+        last_name = " ".join(name_parts[1:])
+    elif len(name_parts) == 1:
+        first_name = name_parts[0]
+        last_name = ""
+    else:
+        first_name = ""
+        last_name = ""
+    
     response = {
         "id": user.id,
         "email": user.email,
         "display_name": profile.display_name,
+        "first_name": first_name,
+        "last_name": last_name,
         "user_type": role.role_name,
         "business_name": profile.business_name if profile.is_business else None,
         "business_id": user.business_id,
