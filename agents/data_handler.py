@@ -71,7 +71,7 @@ except ImportError as e:
 logger = logging.getLogger(__name__)
 
 # Define tables the user is allowed to modify via NL requests
-ALLOWED_USER_MOD_TABLES = ['transactions']
+ALLOWED_USER_MOD_TABLES = ['transactions','budgetentries']
 
 class DataHandler:
     def __init__(self):

@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     # Add the fields that were listed as "Extra inputs are not permitted" in the error:
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
-    LLM_MODEL: str = "llama3.2"  # Updated to match the new field name
+    LLM_MODEL: str = "qwen3:0.6b"  # Updated to match the new field name
 
     class Config:
         env_file = ".env" # which is good practice  
