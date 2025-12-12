@@ -119,6 +119,56 @@ export const authAPI = {
   debugHeaders: () => API.get("/auth/debug-headers"),
 };
 
+// NEW: Chatbot API
+export const chatbotAPI = {
+  // Send a message to the chatbot
+  sendMessage: (message, sessionId = null) => {
+    return API.post("/chatbot/message", {
+      message: message,
+      session_id: sessionId
+    });
+  },
+
+  // Get chat history
+  getChatHistory: (limit = 50, sessionId = null) => {
+    const params = { limit };
+    if (sessionId) {
+      params.session_id = sessionId;
+    }
+    return API.get("/chatbot/history", { params });
+  },
+
+  // Clear chat history
+  clearChatHistory: (sessionId = null) => {
+    const params = sessionId ? { session_id: sessionId } : {};
+    return API.delete("/chatbot/history", { params });
+  },
+
+  // Get all sessions
+  getSessions: () => {
+    return API.get("/chatbot/sessions");
+  },
+
+  // Confirm delete operation
+  confirmDelete: (confirmationId, confirm = true) => {
+    return API.post("/chatbot/confirm-delete", {
+      confirmation_id: confirmationId,
+      confirm: confirm
+    });
+  },
+
+  // Get pending deletes
+  getPendingDeletes: () => {
+    return API.get("/chatbot/pending-deletes");
+  },
+
+  // Health check
+  healthCheck: () => {
+    return API.get("/chatbot/health");
+  }
+};
+
 export default {
-  authAPI
+  authAPI,
+  chatbotAPI
 };

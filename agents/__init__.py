@@ -12,12 +12,11 @@ from .data_handler import DataHandler
 from .query_runner import QueryRunner
 from .intent_classifier import IntentClassifier
 from .prompt_enhancer import PromptEnhancer
-from .chat_interface import ChatInterface
+
 
 __all__ = [
     'DataHandler',
     'QueryRunner', 
     'IntentClassifier',
     'PromptEnhancer',
-    'ChatInterface'
 ]

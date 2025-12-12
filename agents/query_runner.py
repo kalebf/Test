@@ -5,8 +5,8 @@ import logging
 from typing import Tuple, Dict, Any, Optional
 from langchain_ollama import OllamaLLM
 from sqlalchemy import text
-from ...backend.database import get_db
-from ...backend.config import settings
+from backend.database.connection import SessionLocal
+from backend.core.config import settings
 from agents.prompt_enhancer import PromptEnhancer
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,8 @@ class QueryRunner:
 
     def execute_query(self, query: str) -> Dict[str, Any]:
         """Execute SQL query and return results"""
-        db = next(get_db())
+        db = SessionLocal()
+
         try:
             # Wrap raw SQL with text()
             result = db.execute(text(query))
@@ -61,7 +62,7 @@ class QueryRunner:
 
     def _get_schema_info(self) -> str:
         '''Get database schema information focused on LLM-friendly views'''
-        db = next(get_db())
+        db = SessionLocal()
         try:
             # Get detailed view information
             views_query = text("""
@@ -203,7 +204,7 @@ class QueryRunner:
     
     def _check_user_llm_access(self, user_id: int) -> Dict[str, Any]:
         """Check if user has permission to use LLM based on role"""
-        db = next(get_db())
+        db = SessionLocal()
         try:
             # Check user role and LLM access
             role_check = db.execute(text("""
@@ -587,7 +588,7 @@ class QueryRunner:
     
     def execute_query_with_params(self, query: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """Execute SQL query with parameters to prevent SQL injection"""
-        db = next(get_db())
+        db = SessionLocal()
         try:
             result = db.execute(text(query), params)
             

@@ -4,7 +4,7 @@ import re
 import json
 from typing import Dict, Any
 from langchain_ollama import OllamaLLM
-from ...backend.config import settings
+from backend.core.config import settings
 from agents.query_runner import QueryRunner
 from agents.data_handler import DataHandler
 

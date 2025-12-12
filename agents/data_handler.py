@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any
+from typing import Dict, Any,List
 from langchain_ollama import OllamaLLM
 from agents.query_runner import QueryRunner
 import json
@@ -16,7 +16,7 @@ if backend_path not in sys.path:
 try:
     # Try to import settings from backend/config.py
     try:
-        from ...backend.config import settings  # Try importing from backend/config.py
+        from backend.core.config import settings  # Try importing from backend/config.py
     except ImportError:
         # Fallback: use environment variables directly
         from dotenv import load_dotenv
@@ -53,7 +53,7 @@ backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if backend_path not in sys.path:
     sys.path.insert(0, backend_path)
 try:
-    from ...backend.config import settings  # This imports from backend/config.py
+    from backend.core.config import settings  # This imports from backend/config.py
 except ImportError as e:
     print(f"Warning: Could not import from backend/config.py: {e}")
     # Fallback to environment variables
@@ -705,3 +705,62 @@ class DataHandler:
             logger.info("Fixed llmlogs sequence")
         except Exception as e:
             logger.error(f"Failed to fix sequence: {e}")
+    
+    def get_chat_history(self, user_id: int, limit: int = 50) -> List[Dict[str, Any]]:
+   
+        try:
+            # Use parameterized query to select only the current user's logs
+            sql_query = """
+            SELECT id, prompt, response, timestamp 
+            FROM llmlogs 
+            WHERE user_id = :user_id 
+            ORDER BY timestamp ASC 
+            LIMIT :limit
+            """
+            
+            params = {
+                'user_id': user_id,
+                'limit': limit
+            }
+            
+            result = self.query_runner.execute_query_with_params(sql_query, params)
+            
+            # Format the data for the frontend
+            history = []
+            if result.get("data"):
+                for row in result["data"]:
+                    # Unpack the row tuple
+                    log_id = row[0]
+                    prompt = row[1]
+                    response = row[2]
+                    timestamp = row[3]
+                    
+                    # Convert timestamp to string for JSON
+                    if hasattr(timestamp, 'isoformat'):
+                        timestamp_str = timestamp.isoformat()
+                    else:
+                        timestamp_str = str(timestamp)
+                    
+                    # 1. User Message
+                    history.append({
+                        "id": f"user_log_{log_id}",
+                        "role": "user",
+                        "content": prompt,
+                        "timestamp": timestamp_str
+                    })
+                    
+                    # 2. Agent Response
+                    history.append({
+                        "id": f"agent_log_{log_id}",
+                        "role": "agent",
+                        "content": response,
+                        "timestamp": timestamp_str
+                    })
+            
+            return history
+            
+        except Exception as e:
+            logger.error(f"Could not retrieve chat history for user {user_id}: {e}")
+            return []
+        
+        

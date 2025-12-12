@@ -3,7 +3,7 @@ prompt_enhancer.py
 '''
 import logging
 from langchain_ollama import OllamaLLM
-from core.config import settings
+from backend.core.config import settings
 
 logger = logging.getLogger(__name__)
 
