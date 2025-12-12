@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func, desc
+from sqlalchemy import func, desc, extract
 from datetime import datetime, timedelta
 from typing import List
 from database.connection import SessionLocal
@@ -11,6 +11,7 @@ from models.goals import Goal
 from models.profile import Profile
 from routers.auth_router import verify_token
 from models.budgets import Budget
+from models.budget_entries import BudgetEntry
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -31,26 +32,25 @@ def fetch_recent_purchases_helper(user_id: int, db: Session, limit: int = 10):
     
     # Map category IDs to specific item names for personal expenses
     category_item_map = {
-        1: "Rent Payment",           # Housing
-        2: "Grocery Shopping",       # Food  
-        3: "Gas Station",            # Transportation
-        4: "Movie Tickets",          # Entertainment
-        5: "Doctor Visit",           # Healthcare
-        6: "Insurance Premium",      # Insurance
-        7: "Savings Deposit",        # Savings
-        8: "Miscellaneous Expense",  # Other Expense
-        22: "Office Rent",           # Office Rent (if personal user has this)
-        23: "Salary Payment",        # Employee Salaries (unlikely for personal)
-        24: "Software Purchase",     # Software Licenses
-        25: "Marketing Expense",     # Marketing (unlikely for personal)
-        26: "Utility Bill",          # Utilities
-        27: "Business Development",  # Business Development (unlikely)
-        28: "Product Development",   # Product Development (unlikely)
-        29: "Training Course",       # Employee Training
-        30: "Business Operations",   # Business Operations (unlikely)
+        1: "Rent Payment",
+        2: "Grocery Shopping",
+        3: "Gas Station",
+        4: "Movie Tickets",
+        5: "Doctor Visit",
+        6: "Insurance Premium",
+        7: "Savings Deposit",
+        8: "Miscellaneous Expense",
+        22: "Office Rent",
+        23: "Salary Payment",
+        24: "Software Purchase",
+        25: "Marketing Expense",
+        26: "Utility Bill",
+        27: "Business Development",
+        28: "Product Development",
+        29: "Training Course",
+        30: "Business Operations",
     }
     
-    # Fallback generic items based on category names
     category_generic_map = {
         "Housing": "Housing Expense",
         "Food": "Food Purchase", 
@@ -65,47 +65,39 @@ def fetch_recent_purchases_helper(user_id: int, db: Session, limit: int = 10):
     
     result = []
     for t in transactions:
-        # Try to get the most specific item name
         item_name = "Purchase"
         
-        # First, try to use category_id mapping
         if t.category_id and t.category_id in category_item_map:
             item_name = category_item_map[t.category_id]
-        # Then try category name generic mapping
         elif t.category and t.category.name:
             category_name = t.category.name
             if category_name in category_generic_map:
                 item_name = category_generic_map[category_name]
             else:
-                # Use category name itself
                 item_name = category_name
         
-        # Add some variety for common categories based on amount
-        if t.category_id == 2:  # Food
+        if t.category_id == 2:
             if abs(t.amount) < 30:
                 item_name = "Coffee Shop"
             elif abs(t.amount) < 80:
                 item_name = "Restaurant Meal"
             else:
                 item_name = "Grocery Shopping"
-        
-        elif t.category_id == 3:  # Transportation
+        elif t.category_id == 3:
             if abs(t.amount) < 40:
                 item_name = "Bus/Train Fare"
             elif abs(t.amount) < 100:
                 item_name = "Gas Station"
             else:
                 item_name = "Car Maintenance"
-        
-        elif t.category_id == 4:  # Entertainment
+        elif t.category_id == 4:
             if abs(t.amount) < 30:
                 item_name = "Streaming Service"
             elif abs(t.amount) < 60:
                 item_name = "Movie Tickets"
             else:
                 item_name = "Concert/Event"
-        
-        elif t.category_id == 26:  # Utilities
+        elif t.category_id == 26:
             if abs(t.amount) < 100:
                 item_name = "Internet Bill"
             elif abs(t.amount) < 150:
@@ -137,7 +129,6 @@ def fetch_expense_categories_helper(user_id: int, db: Session, month: str = None
     )
     
     if month:
-        # Filter by month if provided
         try:
             year, month_num = map(int, month.split("-"))
             start_date = datetime(year, month_num, 1)
@@ -151,12 +142,10 @@ def fetch_expense_categories_helper(user_id: int, db: Session, month: str = None
                 Transaction.created_at < end_date
             )
         except ValueError:
-            # If month format is invalid, ignore the filter
             pass
     
     results = query.group_by(Category.id, Category.name).all()
     
-    # Color palette for the pie chart
     colors = [
         "#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF",
         "#FF9F40", "#FF6384", "#C9CBCF", "#4BC0C0", "#FF6384"
@@ -173,20 +162,11 @@ def fetch_expense_categories_helper(user_id: int, db: Session, month: str = None
 
 def fetch_user_goals_helper(user_id: int, db: Session):
     """Helper function to fetch user goals"""
-    goals = db.query(Goal).filter(Goal.user_id == user_id).all()  # Changed user.id to user_id
+    goals = db.query(Goal).filter(Goal.user_id == user_id).all()
     
-    # List of nice colors for goals
     goal_colors = [
-        "#36A2EB",  # Blue
-        "#FF6384",  # Pink/Red
-        "#FFCE56",  # Yellow
-        "#4BC0C0",  # Teal
-        "#9966FF",  # Purple
-        "#FF9F40",  # Orange
-        "#C9CBCF",  # Gray
-        "#7D5BA6",  # Your brand purple
-        "#89CE94",  # Your brand green
-        "#643173",  # Your brand dark purple
+        "#36A2EB", "#FF6384", "#FFCE56", "#4BC0C0", "#9966FF",
+        "#FF9F40", "#C9CBCF", "#7D5BA6", "#89CE94", "#643173",
     ]
     
     return [
@@ -197,10 +177,11 @@ def fetch_user_goals_helper(user_id: int, db: Session):
             "current": g.current_amount,
             "type": g.type,
             "status": g.status,
-            "color": goal_colors[i % len(goal_colors)]  # Assign unique color
+            "color": goal_colors[i % len(goal_colors)]
         }
         for i, g in enumerate(goals)
     ]
+
 # ========== API ENDPOINTS ==========
 
 @router.get("/recent-purchases")
@@ -229,8 +210,6 @@ def get_user_goals_endpoint(
     """Get goals for the current user"""
     return fetch_user_goals_helper(user.id, db)
 
-# ========== DASHBOARD SUMMARY ENDPOINT ==========
-
 @router.get("/summary")
 def get_dashboard_summary(
     user: User = Depends(verify_token),
@@ -238,24 +217,17 @@ def get_dashboard_summary(
 ):
     """Get all dashboard data in one endpoint"""
     
-    # Get recent purchases
     recent_purchases = fetch_recent_purchases_helper(user.id, db, limit=10)
-    
-    # Get expense categories (current month)
     current_month = datetime.now().strftime("%Y-%m")
     expense_categories = fetch_expense_categories_helper(user.id, db, month=current_month)
-    
-    # Get goals
     goals = fetch_user_goals_helper(user.id, db)
     
-    # Get user name from profile
     profile = db.query(Profile).filter(Profile.user_id == user.id).first()
     user_name = ""
     
     if profile and profile.display_name:
         user_name = profile.display_name
     elif user.email:
-        # Fallback to email username
         user_name = user.email.split('@')[0]
     
     return {
@@ -265,234 +237,494 @@ def get_dashboard_summary(
         "user_name": user_name
     }
 
-# Add to dashboard_router.py
-
-# Update your dashboard_router.py - add more debugging
-
-# IN dashboard_router.py - UPDATE WITH CORRECT CATEGORIES
+# ========== BUSINESS DASHBOARD ENDPOINT ==========
 
 @router.get("/business/summary")
 def get_business_dashboard_summary(
     user: User = Depends(verify_token),
     db: Session = Depends(get_db)
 ):
-    """Get business dashboard data for the current user"""
+    """Get business dashboard data for the current user - works for both business_admin and business_subuser"""
     
-    print(f"DEBUG: Getting business summary for user {user.id} ({user.email})")
+    print(f"=== BUSINESS DASHBOARD FOR USER {user.id} ===")
     
-    # Check if user has a profile
+    # Get profile
     profile = db.query(Profile).filter(Profile.user_id == user.id).first()
     
     if not profile:
-        print(f"DEBUG: No profile found for user {user.id}")
-        raise HTTPException(
-            status_code=403, 
-            detail="User profile not found. Please complete your profile."
-        )
+        raise HTTPException(status_code=404, detail="Profile not found")
     
-    if not profile.is_business:
-        raise HTTPException(
-            status_code=403, 
-            detail="User is not a business user"
-        )
+    # FIX: For sub-users, get the admin's business_id to access shared business data
+    business_id = user.business_id
+    if not business_id:
+        raise HTTPException(status_code=400, detail="User is not associated with a business")
     
-    # BUSINESS CATEGORIES BASED ON YOUR DATABASE:
-    # Income: 17-21
-    # Expenses: 22-30
-    business_income_ids = [17, 18, 19, 20, 21]      # Client Payments, Software License Revenue, etc.
-    business_expense_ids = list(range(22, 31))      # 22 through 30
+    print(f"Business ID: {business_id}")
     
-    print(f"DEBUG: Business income category IDs: {business_income_ids}")
-    print(f"DEBUG: Business expense category IDs: {business_expense_ids}")
+    # Get the business admin user for this business
+    admin_user = db.query(User).filter(
+        User.business_id == business_id,
+        User.role_id == 2  # business_admin role
+    ).first()
     
-    # Calculate total business income
-    income_result = db.query(func.sum(Transaction.amount)).filter(
-        Transaction.user_id == user.id,
-        Transaction.category_id.in_(business_income_ids),
-        Transaction.amount > 0  # Income should be positive
-    ).scalar()
+    if not admin_user:
+        raise HTTPException(status_code=404, detail="Business admin not found")
     
-    total_income = float(income_result) if income_result else 0.0
+    print(f"Using business admin user_id: {admin_user.id} for data")
     
-    # Calculate total business expenses (negative amounts, take absolute value)
+    # USE ADMIN'S USER_ID FOR ALL DATA QUERIES
+    target_user_id = admin_user.id
+    
+    # Business category IDs
+    business_income_ids = [17, 18, 19, 20, 21]
+    business_expense_ids = [22, 23, 24, 25, 26, 27, 28, 29, 30]
+    
+    print(f"Business income category IDs: {business_income_ids}")
+    print(f"Business expense category IDs: {business_expense_ids}")
+    
+    # Get TOTAL BUDGET from budget_entries (the 'planned' column) - USE ADMIN'S ID
+    budget_entry = db.query(BudgetEntry).filter(
+        BudgetEntry.user_id == target_user_id
+    ).first()
+    
+    if budget_entry:
+        total_budget = float(budget_entry.planned)
+        print(f"Budget from budget_entries: ${total_budget}")
+    else:
+        # FIX: Don't try to access total_amount since it doesn't exist
+        # Just use default budget
+        total_budget = 60000.0
+        print(f"Using default budget: ${total_budget}")
+    
+    # Calculate TOTAL EXPENSES (sum of all expense transactions) - USE ADMIN'S ID
     expense_result = db.query(func.sum(Transaction.amount)).filter(
-        Transaction.user_id == user.id,
-        Transaction.category_id.in_(business_expense_ids),
-        Transaction.amount < 0  # Expenses should be negative
+        Transaction.user_id == target_user_id,
+        Transaction.category_id.in_(business_expense_ids)
     ).scalar()
     
     total_expenses = abs(float(expense_result)) if expense_result else 0.0
+    print(f"Total Expenses: ${total_expenses}")
     
-    print(f"DEBUG: Total business income: ${total_income:.2f}")
-    print(f"DEBUG: Total business expenses: ${total_expenses:.2f}")
+    # Calculate TOTAL INCOME - USE ADMIN'S ID
+    income_result = db.query(func.sum(Transaction.amount)).filter(
+        Transaction.user_id == target_user_id,
+        Transaction.category_id.in_(business_income_ids)
+    ).scalar()
     
-    # Get recent business income transactions (last 10)
-    recent_income = db.query(Transaction).filter(
-        Transaction.user_id == user.id,
+    total_income = float(income_result) if income_result else 0.0
+    print(f"Total Income: ${total_income}")
+    
+    # Budget used = total expenses
+    budget_used = total_expenses
+    budget_percentage = (budget_used / total_budget * 100) if total_budget > 0 else 0
+    
+    print(f"Budget: ${budget_used:.2f} used / ${total_budget:.2f} total = {budget_percentage:.1f}%")
+    
+    # Get current year
+    current_year = datetime.now().year
+    
+    # QUARTERLY INCOME DATA - Group by actual quarters - USE ADMIN'S ID
+    quarterly_income_data = db.query(
+        func.floor((extract('month', Transaction.created_at) - 1) / 3).label('quarter_num'),
+        func.sum(Transaction.amount).label('total')
+    ).filter(
+        Transaction.user_id == target_user_id,
         Transaction.category_id.in_(business_income_ids),
-        Transaction.amount > 0
-    ).order_by(desc(Transaction.created_at)).limit(10).all()
+        extract('year', Transaction.created_at) == current_year
+    ).group_by('quarter_num').all()
     
-    # Get recent business expense transactions (last 10)
-    recent_expenses = db.query(Transaction).filter(
-        Transaction.user_id == user.id,
+    # Build quarterly income array
+    quarterly_income = [
+        {"quarter": "Q1", "amount": 0.0},
+        {"quarter": "Q2", "amount": 0.0},
+        {"quarter": "Q3", "amount": 0.0},
+        {"quarter": "Q4", "amount": 0.0}
+    ]
+    
+    for q_num, total in quarterly_income_data:
+        if q_num is not None and 0 <= int(q_num) <= 3:
+            quarterly_income[int(q_num)]["amount"] = float(total) if total else 0.0
+    
+    print(f"Quarterly Income: {quarterly_income}")
+    
+    # QUARTERLY EXPENSE DATA - Group by actual quarters - USE ADMIN'S ID
+    quarterly_expense_data = db.query(
+        func.floor((extract('month', Transaction.created_at) - 1) / 3).label('quarter_num'),
+        func.sum(Transaction.amount).label('total')
+    ).filter(
+        Transaction.user_id == target_user_id,
         Transaction.category_id.in_(business_expense_ids),
-        Transaction.amount < 0
+        extract('year', Transaction.created_at) == current_year
+    ).group_by('quarter_num').all()
+    
+    # Build quarterly expense array
+    quarterly_expenses = [
+        {"quarter": "Q1", "amount": 0.0},
+        {"quarter": "Q2", "amount": 0.0},
+        {"quarter": "Q3", "amount": 0.0},
+        {"quarter": "Q4", "amount": 0.0}
+    ]
+    
+    for q_num, total in quarterly_expense_data:
+        if q_num is not None and 0 <= int(q_num) <= 3:
+            quarterly_expenses[int(q_num)]["amount"] = abs(float(total)) if total else 0.0
+    
+    print(f"Quarterly Expenses: {quarterly_expenses}")
+    
+    # Get recent income transactions (last 10) - USE ADMIN'S ID
+    recent_income = db.query(Transaction).filter(
+        Transaction.user_id == target_user_id,
+        Transaction.category_id.in_(business_income_ids)
     ).order_by(desc(Transaction.created_at)).limit(10).all()
     
-    print(f"DEBUG: Found {len(recent_income)} income transactions, {len(recent_expenses)} expense transactions")
+    # Get recent expense transactions (last 10) - USE ADMIN'S ID
+    recent_expenses = db.query(Transaction).filter(
+        Transaction.user_id == target_user_id,
+        Transaction.category_id.in_(business_expense_ids)
+    ).order_by(desc(Transaction.created_at)).limit(10).all()
     
-    # Format recent income for frontend
+    print(f"Recent transactions: {len(recent_income)} income, {len(recent_expenses)} expenses")
+    
+    # Format income for frontend
     formatted_income = []
     for trans in recent_income:
-        category_name = trans.category.name if trans.category else "Business Income"
+        category_name = trans.category.name if trans.category else f"Income Category {trans.category_id}"
         formatted_income.append({
             "id": trans.id,
             "description": category_name,
             "date": trans.created_at.strftime("%Y-%m-%d") if trans.created_at else "Unknown",
-            "amount": f"${trans.amount:,.2f}"  # Already positive
+            "amount": f"${trans.amount:,.2f}"
         })
     
-    # Format recent expenses for frontend
+    # Format expenses for frontend
     formatted_expenses = []
     for trans in recent_expenses:
-        category_name = trans.category.name if trans.category else "Business Expense"
+        category_name = trans.category.name if trans.category else f"Expense Category {trans.category_id}"
         formatted_expenses.append({
             "id": trans.id,
             "description": category_name,
             "date": trans.created_at.strftime("%Y-%m-%d") if trans.created_at else "Unknown",
-            "amount": f"${abs(trans.amount):,.2f}"  # Convert negative to positive for display
+            "amount": f"${abs(trans.amount):,.2f}"
         })
     
-    # Get quarterly data - REAL CALCULATION
-    now = datetime.now()
-    current_year = now.year
-    
-    # Define quarters
-    quarters_config = [
-        {"name": "Q1", "start": datetime(current_year, 1, 1), "end": datetime(current_year, 3, 31)},
-        {"name": "Q2", "start": datetime(current_year, 4, 1), "end": datetime(current_year, 6, 30)},
-        {"name": "Q3", "start": datetime(current_year, 7, 1), "end": datetime(current_year, 9, 30)},
-        {"name": "Q4", "start": datetime(current_year, 10, 1), "end": datetime(current_year, 12, 31)}
-    ]
-    
-    quarterly_income = []
-    quarterly_expenses = []
-    
-    for quarter in quarters_config:
-        # Calculate income for this quarter
-        income_q = db.query(func.sum(Transaction.amount)).filter(
-            Transaction.user_id == user.id,
-            Transaction.category_id.in_(business_income_ids),
-            Transaction.amount > 0,
-            Transaction.created_at >= quarter["start"],
-            Transaction.created_at <= quarter["end"]
-        ).scalar()
-        
-        # Calculate expenses for this quarter (take absolute value)
-        expense_q = db.query(func.sum(Transaction.amount)).filter(
-            Transaction.user_id == user.id,
-            Transaction.category_id.in_(business_expense_ids),
-            Transaction.amount < 0,
-            Transaction.created_at >= quarter["start"],
-            Transaction.created_at <= quarter["end"]
-        ).scalar()
-        
-        quarterly_income.append({
-            "quarter": quarter["name"],
-            "amount": float(income_q) if income_q else 0.0
-        })
-        
-        quarterly_expenses.append({
-            "quarter": quarter["name"],
-            "amount": abs(float(expense_q)) if expense_q else 0.0  # Convert to positive
-        })
-    
-    # Get budget data
-    budget = db.query(Budget).filter(Budget.user_id == user.id).first()
-    
-    # Handle budget total - check if field exists
-    if budget:
-        # Check if budget has total_amount attribute
-        if hasattr(budget, 'total_amount'):
-            budget_total = budget.total_amount
-        else:
-            print("WARNING: Budget model doesn't have total_amount field, using default")
-            budget_total = 100000
-    else:
-        # Create a default budget if none exists
-        budget_total = 100000
-    
-    # Budget used is total expenses
-    budget_used = total_expenses
-    
-    print(f"DEBUG: Budget - used: ${budget_used:.2f}, total: ${budget_total:.2f}")
-    
-    return {
+    # Prepare response
+    response_data = {
         "budget": {
-            "used": budget_used,
-            "total": budget_total
+            "used": float(budget_used),
+            "total": float(total_budget)
         },
         "incomeData": quarterly_income,
         "expenseData": quarterly_expenses,
         "recentIncome": formatted_income,
         "recentExpenses": formatted_expenses,
-        "business_name": profile.business_name or "My Business",
+        "business_name": profile.business_name or "Business",
         "stats": {
-            "total_income": total_income,
-            "total_expenses": total_expenses,
-            "net_profit": total_income - total_expenses,
-            "budget_percentage": (budget_used / budget_total * 100) if budget_total > 0 else 0
+            "total_income": float(total_income),
+            "total_expenses": float(total_expenses),
+            "net_profit": float(total_income - total_expenses),
+            "budget_percentage": float(budget_percentage)
         }
     }
     
-@router.get("/business/debug")
-def debug_business_data(
+    print(f"=== FINAL RESPONSE DATA ===")
+    print(f"Budget: ${response_data['budget']['used']} / ${response_data['budget']['total']}")
+    print(f"Income Data: {response_data['incomeData']}")
+    print(f"Expense Data: {response_data['expenseData']}")
+    print(f"Recent Income: {len(response_data['recentIncome'])} items")
+    print(f"Recent Expenses: {len(response_data['recentExpenses'])} items")
+    
+    return response_data
+
+# ========== BUSINESS GOALS ENDPOINT ==========
+
+@router.get("/business/goals")
+def get_business_goals(
     user: User = Depends(verify_token),
     db: Session = Depends(get_db)
 ):
-    """Debug endpoint to see what business data exists"""
+    """Get business goals - works for both business_admin and business_subuser"""
     
-    # Check profile
-    profile = db.query(Profile).filter(Profile.user_id == user.id).first()
+    print(f"=== FETCHING BUSINESS GOALS FOR USER {user.id} ===")
     
-    # Get all business transactions
-    business_income_ids = [17, 18, 19, 20, 21]
-    business_expense_ids = list(range(22, 31))
+    # Get business_id
+    business_id = user.business_id
+    if not business_id:
+        raise HTTPException(status_code=400, detail="User is not associated with a business")
     
-    all_business_ids = business_income_ids + business_expense_ids
+    # Find the business admin for this business
+    admin_user = db.query(User).filter(
+        User.business_id == business_id,
+        User.role_id == 2  # business_admin role
+    ).first()
     
-    # Get all transactions
-    all_transactions = db.query(Transaction).filter(
-        Transaction.user_id == user.id,
-        Transaction.category_id.in_(all_business_ids)
+    if not admin_user:
+        raise HTTPException(status_code=404, detail="Business admin not found")
+    
+    print(f"Using business admin user_id: {admin_user.id} for goals")
+    
+    # Get all business goals for the admin (shared across business)
+    goals = db.query(Goal).filter(
+        Goal.user_id == admin_user.id,
+        Goal.type == "business"
     ).all()
     
-    # Format for display
-    formatted_tx = []
-    for tx in all_transactions:
-        category_name = tx.category.name if tx.category else f"Category {tx.category_id}"
-        formatted_tx.append({
-            "id": tx.id,
-            "category_id": tx.category_id,
-            "category_name": category_name,
-            "amount": tx.amount,
-            "created_at": tx.created_at.strftime("%Y-%m-%d") if tx.created_at else None,
-            "type": "income" if tx.amount > 0 else "expense"
+    print(f"Found {len(goals)} business goals")
+    
+    # Department color mapping (expanded for better variety)
+    department_colors = {
+        "Sales": "#7D5BA6",
+        "Marketing": "#6BB577",
+        "Operations": "#4BC0C0",
+        "R&D": "#9966FF",
+        "HR": "#FF9F40",
+        "Finance": "#8B5CF6",
+        "IT": "#36A2EB",
+        "Customer Support": "#FF6B8B",
+        "General": "#A0AEC0",
+        "Revenue": "#E63946",
+        "Campaign": "#F77F00",
+        "Cost": "#06A77D",
+        "Product": "#2A9D8F",
+        "Training": "#9D4EDD",
+        "Development": "#4361EE"
+    }
+    
+    # Format goals for frontend
+    formatted_goals = []
+    for i, goal in enumerate(goals):
+        # Smart department assignment based on goal name keywords
+        department = "General"
+        goal_name_lower = goal.name.lower()
+        
+        # Check for specific keywords in order of priority
+        if "revenue" in goal_name_lower or "sales" in goal_name_lower:
+            department = "Revenue"
+        elif "marketing" in goal_name_lower or "campaign" in goal_name_lower:
+            department = "Campaign"
+        elif "cost" in goal_name_lower or "reduction" in goal_name_lower:
+            department = "Cost"
+        elif "product" in goal_name_lower:
+            department = "Product"
+        elif "training" in goal_name_lower or "employee" in goal_name_lower:
+            department = "Training"
+        elif "development" in goal_name_lower:
+            department = "Development"
+        elif "operations" in goal_name_lower:
+            department = "Operations"
+        elif "finance" in goal_name_lower:
+            department = "Finance"
+        elif "hr" in goal_name_lower or "human" in goal_name_lower:
+            department = "HR"
+        elif "it" in goal_name_lower or "technology" in goal_name_lower:
+            department = "IT"
+        elif "support" in goal_name_lower or "customer" in goal_name_lower:
+            department = "Customer Support"
+        
+        formatted_goals.append({
+            "id": goal.id,
+            "name": goal.name,
+            "target": float(goal.target_amount),
+            "current": float(goal.current_amount),
+            "department": department,
+            "color": department_colors.get(department, "#A0AEC0"),
+            "status": goal.status
         })
     
-    # Check categories
-    categories = db.query(Category).filter(Category.id.in_(all_business_ids)).all()
+    print(f"Returning {len(formatted_goals)} formatted goals")
+    
+    return formatted_goals
+
+@router.post("/business/goals")
+def create_business_goal(
+    goal_data: dict,
+    user: User = Depends(verify_token),
+    db: Session = Depends(get_db)
+):
+    """Create a new business goal"""
+    
+    # Get business_id
+    business_id = user.business_id
+    if not business_id:
+        raise HTTPException(status_code=400, detail="User is not associated with a business")
+    
+    # Find the business admin
+    admin_user = db.query(User).filter(
+        User.business_id == business_id,
+        User.role_id == 2
+    ).first()
+    
+    if not admin_user:
+        raise HTTPException(status_code=404, detail="Business admin not found")
+    
+    # Create goal for the admin (shared across business)
+    new_goal = Goal(
+        user_id=admin_user.id,
+        name=goal_data.get("name"),
+        type="business",
+        target_amount=float(goal_data.get("amount")),
+        current_amount=0.0,
+        status="on_track"
+    )
+    
+    db.add(new_goal)
+    db.commit()
+    db.refresh(new_goal)
     
     return {
-        "user_id": user.id,
-        "email": user.email,
-        "profile_exists": profile is not None,
-        "is_business": profile.is_business if profile else False,
-        "business_name": profile.business_name if profile else None,
-        "total_transactions": len(all_transactions),
-        "transactions": formatted_tx,
-        "categories": [{"id": c.id, "name": c.name, "kind": c.kind} for c in categories],
-        "business_income_ids": business_income_ids,
-        "business_expense_ids": business_expense_ids
+        "message": "Business goal created successfully",
+        "goal_id": new_goal.id
+    }
+
+@router.put("/business/goals/{goal_id}")
+def update_business_goal(
+    goal_id: int,
+    goal_data: dict,
+    user: User = Depends(verify_token),
+    db: Session = Depends(get_db)
+):
+    """Update a business goal"""
+    
+    # Get business_id
+    business_id = user.business_id
+    if not business_id:
+        raise HTTPException(status_code=400, detail="User is not associated with a business")
+    
+    # Find the business admin
+    admin_user = db.query(User).filter(
+        User.business_id == business_id,
+        User.role_id == 2
+    ).first()
+    
+    if not admin_user:
+        raise HTTPException(status_code=404, detail="Business admin not found")
+    
+    # Get the goal
+    goal = db.query(Goal).filter(
+        Goal.id == goal_id,
+        Goal.user_id == admin_user.id
+    ).first()
+    
+    if not goal:
+        raise HTTPException(status_code=404, detail="Goal not found")
+    
+    # Update goal fields
+    if "name" in goal_data:
+        goal.name = goal_data["name"]
+    if "target" in goal_data:
+        goal.target_amount = float(goal_data["target"])
+    if "current" in goal_data:
+        goal.current_amount = float(goal_data["current"])
+    
+    # Update status based on current vs target
+    if goal.current_amount >= goal.target_amount:
+        goal.status = "completed"
+    else:
+        goal.status = "on_track"
+    
+    db.commit()
+    db.refresh(goal)
+    
+    return {
+        "message": "Business goal updated successfully",
+        "goal_id": goal.id
+    }
+
+@router.delete("/business/goals/{goal_id}")
+def delete_business_goal(
+    goal_id: int,
+    user: User = Depends(verify_token),
+    db: Session = Depends(get_db)
+):
+    """Delete a business goal"""
+    
+    # Get business_id
+    business_id = user.business_id
+    if not business_id:
+        raise HTTPException(status_code=400, detail="User is not associated with a business")
+    
+    # Find the business admin
+    admin_user = db.query(User).filter(
+        User.business_id == business_id,
+        User.role_id == 2
+    ).first()
+    
+    if not admin_user:
+        raise HTTPException(status_code=404, detail="Business admin not found")
+    
+    # Get the goal
+    goal = db.query(Goal).filter(
+        Goal.id == goal_id,
+        Goal.user_id == admin_user.id
+    ).first()
+    
+    if not goal:
+        raise HTTPException(status_code=404, detail="Goal not found")
+    
+    db.delete(goal)
+    db.commit()
+    
+    return {
+        "message": "Business goal deleted successfully"
+    }
+
+@router.get("/business/test/{user_id}")
+def test_business_data(user_id: int, db: Session = Depends(get_db)):
+    """Test endpoint to see business data for any user"""
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return {"error": "User not found"}
+    
+    profile = db.query(Profile).filter(Profile.user_id == user_id).first()
+    budget_entries = db.query(BudgetEntry).filter(BudgetEntry.user_id == user_id).all()
+    transactions = db.query(Transaction).filter(Transaction.user_id == user_id).all()
+    
+    business_income_ids = [17, 18, 19, 20, 21]
+    business_expense_ids = [22, 23, 24, 25, 26, 27, 28, 29, 30]
+    
+    income_tx = [t for t in transactions if t.category_id in business_income_ids]
+    expense_tx = [t for t in transactions if t.category_id in business_expense_ids]
+    
+    return {
+        "user": {
+            "id": user.id,
+            "email": user.email
+        },
+        "profile": {
+            "exists": profile is not None,
+            "is_business": profile.is_business if profile else False,
+            "business_name": profile.business_name if profile else None
+        },
+        "budget_entries": [
+            {
+                "id": be.id,
+                "budget_id": be.budget_id,
+                "category_id": be.category_id,
+                "planned": be.planned,
+                "user_id": be.user_id
+            } for be in budget_entries
+        ],
+        "transactions": {
+            "total": len(transactions),
+            "income": len(income_tx),
+            "expenses": len(expense_tx),
+            "income_list": [
+                {
+                    "id": t.id,
+                    "category_id": t.category_id,
+                    "category_name": t.category.name if t.category else None,
+                    "amount": t.amount,
+                    "date": t.created_at
+                } for t in income_tx
+            ],
+            "expense_list": [
+                {
+                    "id": t.id,
+                    "category_id": t.category_id,
+                    "category_name": t.category.name if t.category else None,
+                    "amount": t.amount,
+                    "date": t.created_at
+                } for t in expense_tx
+            ]
+        }
     }

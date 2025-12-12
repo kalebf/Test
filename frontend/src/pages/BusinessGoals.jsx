@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import NavBar from './NavBar';
-import PlotlyBusiness from './PlotlyBusiness';
 
 const BusinessGoals = () => {
   const navigate = useNavigate();
@@ -10,6 +9,7 @@ const BusinessGoals = () => {
   const [showAddGoal, setShowAddGoal] = useState(false);
   const [editGoalIndex, setEditGoalIndex] = useState(null);
   const [editData, setEditData] = useState({ name: "", target: "", current: "", department: "" });
+  const [loading, setLoading] = useState(true);
   const [departments] = useState([
     "Sales",
     "Marketing", 
@@ -21,31 +21,47 @@ const BusinessGoals = () => {
     "Customer Support"
   ]);
 
-  // Generate a unique color for a department
-  const addNewGoal = () => {
-  if (!newGoal.name || !newGoal.amount || !newGoal.department) {
-    alert("Please fill in all fields");
-    return;
-  }
+  // Fetch goals from database on component mount
+  useEffect(() => {
+    fetchGoalsFromDatabase();
+  }, []);
 
-  const newGoalObj = {
-    name: newGoal.name,
-    target: parseFloat(newGoal.amount),
-    current: 0,
-    department: newGoal.department,
-    color: getDepartmentColor(newGoal.department),
+  const fetchGoalsFromDatabase = async () => {
+    try {
+      setLoading(true);
+      const token = sessionStorage.getItem("access_token") || localStorage.getItem("access_token");
+      
+      if (!token) {
+        console.error("No token found");
+        navigate("/Login");
+        return;
+      }
+      
+      console.log("Fetching business goals from database...");
+      
+      const response = await fetch("http://localhost:8000/dashboard/business/goals", {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Fetched business goals:", data);
+        setGoals(data);
+      } else {
+        console.error("Failed to fetch goals:", response.status);
+        if (response.status === 401) {
+          navigate("/Login");
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching business goals:", error);
+    } finally {
+      setLoading(false);
+    }
   };
-
-  const updatedGoals = [...goals, newGoalObj];
-  setGoals(updatedGoals);
-  saveGoalsToSessionStorage(updatedGoals);
-  
-  // Reset form
-  setNewGoal({ name: "", amount: "", department: "" });
-  setShowAddGoal(false);
-  
-  alert("Business goal created successfully!");
-};
 
   const getDepartmentColor = (department) => {
     const colorMap = {
@@ -57,85 +73,121 @@ const BusinessGoals = () => {
       "Finance": "#8B5CF6",
       "IT": "#36A2EB",
       "Customer Support": "#FF6B8B",
-      "General": "#A0AEC0"
+      "General": "#A0AEC0",
+      "Revenue": "#E63946",      // Red for revenue goals
+      "Campaign": "#F77F00",     // Orange for campaigns
+      "Cost": "#06A77D",         // Teal for cost reduction
+      "Product": "#4361EE",      // Blue for products
+      "Training": "#9D4EDD",     // Purple for training
+      "Development": "#2A9D8F"   // Green for development
     };
     
-    // Return the color if it exists in the map, otherwise generate a random color
     return colorMap[department] || `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0')}`;
   };
 
-  // Create an empty goal structure for a department
-  const createEmptyGoal = (department) => {
-    return {
-      name: "",
-      target: 0,
-      current: 0,
-      department: department,
-      color: getDepartmentColor(department),
-    };
-  };
-
-  // Check user type and load goals on component mount
-useEffect(() => {
-  // Clear any old business goals when component loads
-  const currentUserEmail = sessionStorage.getItem("email");
-  const storedUserEmail = sessionStorage.getItem("business_goals_user");
-  
-  // If different user, clear old goals
-  if (storedUserEmail && storedUserEmail !== currentUserEmail) {
-    sessionStorage.removeItem("business_goals");
-  }
-  
-  // Store current user email with goals
-  if (currentUserEmail) {
-    sessionStorage.setItem("business_goals_user", currentUserEmail);
-  }
-  
-  const userType = sessionStorage.getItem("user_type");
-  
-  // ... rest of your existing code
-}, [navigate]);
-  // Save business goals to sessionStorage whenever they change
-  const saveGoalsToSessionStorage = (updatedGoals) => {
-  try {
-    const currentUserEmail = sessionStorage.getItem("email");
-    if (currentUserEmail) {
-      // Store goals with user identifier
-      const goalsData = {
-        userEmail: currentUserEmail,
-        goals: updatedGoals,
-        timestamp: new Date().toISOString()
-      };
-      sessionStorage.setItem("business_goals", JSON.stringify(goalsData));
-      window.dispatchEvent(new Event('storage'));
+  const addNewGoal = async () => {
+    if (!newGoal.name || !newGoal.amount || !newGoal.department) {
+      alert("Please fill in all fields");
+      return;
     }
-  } catch (error) {
-    console.error("Error saving business goals:", error);
-  }
-};
-  const updateGoal = () => {
-    if (editGoalIndex !== null) {
-      const updated = [...goals];
-      updated[editGoalIndex] = {
-        ...updated[editGoalIndex],
-        name: editData.name,
-        target: Number(editData.target),
-        current: Number(editData.current),
-        department: editData.department,
-        color: getDepartmentColor(editData.department),
-      };
+
+    try {
+      const token = sessionStorage.getItem("access_token") || localStorage.getItem("access_token");
       
-      setGoals(updated);
-      saveGoalsToSessionStorage(updated);
-      setEditGoalIndex(null);
+      const response = await fetch("http://localhost:8000/dashboard/business/goals", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          name: newGoal.name,
+          amount: parseFloat(newGoal.amount),
+          department: newGoal.department
+        })
+      });
+
+      if (response.ok) {
+        // Refresh goals from database
+        await fetchGoalsFromDatabase();
+        
+        // Reset form
+        setNewGoal({ name: "", amount: "", department: "" });
+        setShowAddGoal(false);
+        
+        alert("Business goal created successfully!");
+      } else {
+        console.error("Failed to create goal:", response.status);
+        alert("Failed to create goal. Please try again.");
+      }
+    } catch (error) {
+      console.error("Error creating goal:", error);
+      alert("Error creating goal. Please try again.");
     }
   };
 
-  const deleteGoal = (index) => {
+  const updateGoal = async () => {
+    if (editGoalIndex !== null && editGoalIndex < goals.length) {
+      const goalToUpdate = goals[editGoalIndex];
+      
+      try {
+        const token = sessionStorage.getItem("access_token") || localStorage.getItem("access_token");
+        
+        const response = await fetch(`http://localhost:8000/dashboard/business/goals/${goalToUpdate.id}`, {
+          method: "PUT",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            name: editData.name,
+            target: parseFloat(editData.target),
+            current: parseFloat(editData.current),
+            department: editData.department
+          })
+        });
+
+        if (response.ok) {
+          // Refresh goals from database
+          await fetchGoalsFromDatabase();
+          setEditGoalIndex(null);
+        } else {
+          console.error("Failed to update goal:", response.status);
+          alert("Failed to update goal. Please try again.");
+        }
+      } catch (error) {
+        console.error("Error updating goal:", error);
+        alert("Error updating goal. Please try again.");
+      }
+    }
+  };
+
+  const deleteGoal = async (index) => {
     if (window.confirm("Are you sure you want to delete this business goal?")) {
-      const updatedGoals = goals.filter((_, i) => i !== index);
-      setGoals(updatedGoals);
-      saveGoalsToSessionStorage(updatedGoals);
+      const goalToDelete = goals[index];
+      
+      try {
+        const token = sessionStorage.getItem("access_token") || localStorage.getItem("access_token");
+        
+        const response = await fetch(`http://localhost:8000/dashboard/business/goals/${goalToDelete.id}`, {
+          method: "DELETE",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
+          }
+        });
+
+        if (response.ok) {
+          // Refresh goals from database
+          await fetchGoalsFromDatabase();
+        } else {
+          console.error("Failed to delete goal:", response.status);
+          alert("Failed to delete goal. Please try again.");
+        }
+      } catch (error) {
+        console.error("Error deleting goal:", error);
+        alert("Error deleting goal. Please try again.");
+      }
     }
   };
     
@@ -165,6 +217,17 @@ useEffect(() => {
   };
 
   const departmentBreakdown = getGoalsByDepartment();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen" style={{ backgroundColor: '#F5F7FA' }}>
+        <NavBar />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-xl">Loading business goals...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen" style={{ backgroundColor: '#F5F7FA' }}>
@@ -221,9 +284,9 @@ useEffect(() => {
             </div>
 
             {/* Main Content Area */}
-            <div className="flex-1 flex gap-6 overflow-hidden">
+            <div className="flex-1 flex gap-6 overflow-hidden min-h-0">
               {/* Goals List Section */}
-              <div className="flex-1 flex flex-col">
+              <div className="flex-1 flex flex-col min-h-0">
                 <div className="bg-white rounded-2xl shadow-lg border-2 flex-1 flex flex-col overflow-hidden" style={{ borderColor: '#6BB577' }}>
                   <div className="p-6 border-b" style={{ borderColor: '#E5E7EB' }}>
                     <div className="flex justify-between items-center">
@@ -260,7 +323,7 @@ useEffect(() => {
                           const remaining = Math.max(0, goal.target - goal.current);
                           
                           return (
-                            <div key={index} className="p-6 rounded-xl border-2 hover:shadow-md transition-all" 
+                            <div key={goal.id} className="p-6 rounded-xl border-2 hover:shadow-md transition-all" 
                               style={{ 
                                 borderColor: deptColor + '40',
                                 backgroundColor: '#FFFFFF'
@@ -353,9 +416,9 @@ useEffect(() => {
               </div>
 
               {/* Side Panel with Stats */}
-              <div className="w-80 flex flex-col gap-6">
+              <div className="w-80 flex flex-col gap-6 overflow-y-auto min-h-0">
                 {/* Department Breakdown */}
-                <div className="bg-white rounded-2xl shadow-lg border-2 p-6" style={{ borderColor: '#6BB577' }}>
+                <div className="bg-white rounded-2xl shadow-lg border-2 p-6 flex-shrink-0" style={{ borderColor: '#6BB577' }}>
                   <h3 className="text-xl font-bold mb-4" style={{ color: '#333333' }}>
                     Department Breakdown
                   </h3>
@@ -391,102 +454,6 @@ useEffect(() => {
                         );
                       })
                     )}
-                  </div>
-                </div>
-
-                {/* Quick Actions */}
-                <div className="bg-white rounded-2xl shadow-lg border-2 p-6" style={{ borderColor: '#6BB577' }}>
-                  <h3 className="text-xl font-bold mb-4" style={{ color: '#333333' }}>
-                    Quick Actions
-                  </h3>
-                  <div className="space-y-3">
-                    <button
-                      onClick={() => setShowAddGoal(true)}
-                      className="w-full py-3 bg-[#7D5BA6] text-white rounded-lg hover:bg-[#6d4f96] transition-colors font-medium shadow-sm"
-                    >
-                      + Add New Goal
-                    </button>
-                    <button
-                      onClick={() => {
-                        // Add random progress to all goals
-                        const updatedGoals = goals.map(goal => ({
-                          ...goal,
-                          current: Math.min(
-                            goal.target,
-                            goal.current + Math.floor(Math.random() * goal.target * 0.1)
-                          )
-                        }));
-                        setGoals(updatedGoals);
-                        saveGoalsToSessionStorage(updatedGoals);
-                      }}
-                      className="w-full py-3 bg-[#4BC0C0] text-white rounded-lg hover:bg-[#3ba9a9] transition-colors font-medium shadow-sm"
-                      disabled={goals.length === 0}
-                    >
-                      Simulate Progress
-                    </button>
-                    {goals.length === 0 && (
-                      <button
-                        onClick={() => {
-                          // Add sample goals for demonstration
-                          const sampleGoals = [
-                            {
-                              name: "Q2 Revenue Target",
-                              target: 200000,
-                              current: 125000,
-                              department: "Sales",
-                              color: getDepartmentColor("Sales")
-                            },
-                            {
-                              name: "Marketing Campaign ROI",
-                              target: 50000,
-                              current: 32500,
-                              department: "Marketing",
-                              color: getDepartmentColor("Marketing")
-                            },
-                            {
-                              name: "Cost Reduction Initiative",
-                              target: 75000,
-                              current: 42000,
-                              department: "Operations",
-                              color: getDepartmentColor("Operations")
-                            }
-                          ];
-                          setGoals(sampleGoals);
-                          saveGoalsToSessionStorage(sampleGoals);
-                        }}
-                        className="w-full py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium shadow-sm"
-                      >
-                        Load Sample Goals
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Summary Stats */}
-                <div className="bg-white rounded-2xl shadow-lg border-2 p-6" style={{ borderColor: '#6BB577' }}>
-                  <h3 className="text-xl font-bold mb-4" style={{ color: '#333333' }}>
-                    Summary
-                  </h3>
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Total Goals:</span>
-                      <span className="font-semibold">{goals.length}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Active Departments:</span>
-                      <span className="font-semibold">
-                        {Object.keys(departmentBreakdown).length}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Avg. Completion:</span>
-                      <span className="font-semibold" style={{ color: '#4BC0C0' }}>
-                        {goals.length > 0 
-                          ? (goals.reduce((sum, goal) => sum + (goal.current/goal.target), 0) / goals.length * 100).toFixed(1)
-                          : '0'
-                        }%
-                      </span>
-                    </div>
                   </div>
                 </div>
               </div>

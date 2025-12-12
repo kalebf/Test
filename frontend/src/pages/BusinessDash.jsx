@@ -1,5 +1,5 @@
 // BusinessDash.jsx
-import React, { useState, useEffect } from 'react'; // Add useState and useEffect imports
+import React, { useState, useEffect } from 'react';
 import NavBar from './NavBar';
 import PlotlyBusiness from './PlotlyBusiness';
 
@@ -10,7 +10,6 @@ function BusinessDash({
   recentIncome = [],
   recentExpenses = []
 }) {
-  // Add state for real data
   const [dashboardData, setDashboardData] = useState({
     budget,
     incomeData,
@@ -21,89 +20,67 @@ function BusinessDash({
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Fetch data if not provided via props
-    if (!budget || budget.total === 1) { // Check if using default
-      fetchBusinessData();
-    }
+    // Always fetch data when component mounts
+    fetchBusinessData();
   }, []);
 
- // BusinessDash.jsx - UPDATE fetchBusinessData function
-
-const fetchBusinessData = async () => {
-  try {
-    setLoading(true);
-    const token = localStorage.getItem("token") || sessionStorage.getItem("token");
-    
-    if (!token) {
-      console.error("No authentication token found");
-      setLoading(false);
-      return;
-    }
-    
-    console.log("Fetching business dashboard data...");
-    
-    // FIRST: Try debug endpoint to see what data exists
-    const debugResponse = await fetch("http://localhost:8000/dashboard/business/debug", {
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json"
-      }
-    });
-    
-    if (debugResponse.ok) {
-      const debugData = await debugResponse.json();
-      console.log("DEBUG DATA:", debugData);
+  const fetchBusinessData = async () => {
+    try {
+      setLoading(true);
       
-      // Store user info if available
-      if (debugData.business_name) {
-        sessionStorage.setItem("business_name", debugData.business_name);
-      }
-    }
-    
-    // THEN: Get the actual dashboard data
-    const response = await fetch("http://localhost:8000/dashboard/business/summary", {
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json"
-      }
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      console.log("BUSINESS DASHBOARD DATA:", data);
+      // FIX: Use 'access_token' instead of 'token' to match login
+      const token = sessionStorage.getItem("access_token") || localStorage.getItem("access_token");
       
-      // Check if we have data
-      if (data.recentIncome && data.recentIncome.length > 0) {
-        console.log(`Loaded ${data.recentIncome.length} income records`);
-      } else {
-        console.log("No income data found");
+      if (!token) {
+        console.error("No authentication token found");
+        window.location.href = "/Login";
+        return;
       }
       
-      if (data.recentExpenses && data.recentExpenses.length > 0) {
-        console.log(`Loaded ${data.recentExpenses.length} expense records`);
-      } else {
-        console.log("No expense data found");
-      }
+      console.log("=== FETCHING BUSINESS DATA ===");
       
-      setDashboardData({
-        budget: data.budget || { used: 0, total: 1 },
-        incomeData: data.incomeData || [],
-        expenseData: data.expenseData || [],
-        recentIncome: data.recentIncome || [],
-        recentExpenses: data.recentExpenses || []
+      const response = await fetch("http://localhost:8000/dashboard/business/summary", {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        }
       });
-      
-    } else {
-      console.error("Failed to fetch business data:", response.status, response.statusText);
-      const errorText = await response.text();
-      console.error("Error response:", errorText);
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log("=== BUSINESS DASHBOARD RAW RESPONSE ===");
+        console.log("Full response:", data);
+        console.log("Budget:", data.budget);
+        console.log("Income data:", data.incomeData);
+        console.log("Expense data:", data.expenseData);
+        console.log("Recent income:", data.recentIncome?.length);
+        console.log("Recent expenses:", data.recentExpenses?.length);
+        
+        setDashboardData({
+          budget: data.budget || { used: 0, total: 60000 },
+          incomeData: data.incomeData || [],
+          expenseData: data.expenseData || [],
+          recentIncome: data.recentIncome || [],
+          recentExpenses: data.recentExpenses || []
+        });
+        
+      } else {
+        console.error("Failed to fetch business data:", response.status, response.statusText);
+        const errorText = await response.text();
+        console.error("Error response:", errorText);
+        
+        if (response.status === 401) {
+          // Unauthorized - redirect to login
+          window.location.href = "/Login";
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching business data:", error);
+    } finally {
+      setLoading(false);
     }
-  } catch (error) {
-    console.error("Error fetching business data:", error);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
+
   if (loading) {
     return (
       <div style={{ display: 'flex', height: '100vh', width: '100vw', overflow: 'hidden', backgroundColor: '#E8E8E8' }}>
@@ -115,7 +92,6 @@ const fetchBusinessData = async () => {
     );
   }
 
-  // Use dashboardData instead of props
   const budgetPercentage = (dashboardData.budget.used / dashboardData.budget.total) * 100;
 
   const cardShadow = {
@@ -224,26 +200,34 @@ const fetchBusinessData = async () => {
                 <PlotlyBusiness data={dashboardData.incomeData} color="#5CB85C" type="income" />
               </div>
             </div>
-            <div style={{ borderTop: '1px solid #E5E5E5', flex: 1, overflowY: 'auto', padding: '0 16px 16px 16px' }}>
-              <h3 style={{ fontWeight: '600', fontSize: '18px', marginBottom: '12px', paddingTop: '16px', position: 'sticky', top: 0, backgroundColor: 'white', color: '#333' }}>Recent Income</h3>
+            <div style={{ borderTop: '1px solid #E5E5E5', flex: 1, overflowY: 'auto', padding: '16px' }}>
+              <h3 style={{ fontWeight: '600', fontSize: '18px', marginBottom: '12px', color: '#333' }}>Recent Income</h3>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead style={{ position: 'sticky', top: '48px', backgroundColor: 'white' }}>
-                  <tr style={{ borderBottom: '1px solid #E5E5E5' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #E5E5E5' }}>
                     <th style={{ textAlign: 'left', padding: '8px', fontSize: '14px', fontWeight: '600', color: '#666' }}>Description</th>
                     <th style={{ textAlign: 'left', padding: '8px', fontSize: '14px', fontWeight: '600', color: '#666' }}>Date</th>
                     <th style={{ textAlign: 'right', padding: '8px', fontSize: '14px', fontWeight: '600', color: '#666' }}>Amount</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {dashboardData.recentIncome.map(item => (
-                    <tr key={item.id} style={{ borderBottom: '1px solid #F5F5F5' }}>
-                      <td style={{ padding: '8px', fontSize: '14px', color: '#333' }}>{item.description}</td>
-                      <td style={{ padding: '8px', fontSize: '14px', color: '#666' }}>{item.date}</td>
-                      <td style={{ padding: '8px', textAlign: 'right', fontSize: '14px', fontWeight: '600', color: '#5CB85C' }}>
-                        {item.amount}
+                  {dashboardData.recentIncome.length === 0 ? (
+                    <tr>
+                      <td colSpan="3" style={{ textAlign: 'center', padding: '20px', color: '#999', fontStyle: 'italic' }}>
+                        No recent income transactions
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    dashboardData.recentIncome.map(item => (
+                      <tr key={item.id} style={{ borderBottom: '1px solid #F5F5F5' }}>
+                        <td style={{ padding: '8px', fontSize: '14px', color: '#333' }}>{item.description}</td>
+                        <td style={{ padding: '8px', fontSize: '14px', color: '#666' }}>{item.date}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', fontSize: '14px', fontWeight: '600', color: '#5CB85C' }}>
+                          {item.amount}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -279,26 +263,34 @@ const fetchBusinessData = async () => {
                 <PlotlyBusiness data={dashboardData.expenseData} color="#E67E9F" type="expense" />
               </div>
             </div>
-            <div style={{ borderTop: '1px solid #E5E5E5', flex: 1, overflowY: 'auto', padding: '0 16px 16px 16px' }}>
-              <h3 style={{ fontWeight: '600', fontSize: '18px', marginBottom: '12px', paddingTop: '16px', position: 'sticky', top: 0, backgroundColor: 'white', color: '#333' }}>Recent Expenses</h3>
+            <div style={{ borderTop: '1px solid #E5E5E5', flex: 1, overflowY: 'auto', padding: '16px' }}>
+              <h3 style={{ fontWeight: '600', fontSize: '18px', marginBottom: '12px', color: '#333' }}>Recent Expenses</h3>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead style={{ position: 'sticky', top: '48px', backgroundColor: 'white' }}>
-                  <tr style={{ borderBottom: '1px solid #E5E5E5' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #E5E5E5' }}>
                     <th style={{ textAlign: 'left', padding: '8px', fontSize: '14px', fontWeight: '600', color: '#666' }}>Description</th>
                     <th style={{ textAlign: 'left', padding: '8px', fontSize: '14px', fontWeight: '600', color: '#666' }}>Date</th>
                     <th style={{ textAlign: 'right', padding: '8px', fontSize: '14px', fontWeight: '600', color: '#666' }}>Amount</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {dashboardData.recentExpenses.map(item => (
-                    <tr key={item.id} style={{ borderBottom: '1px solid #F5F5F5' }}>
-                      <td style={{ padding: '8px', fontSize: '14px', color: '#333' }}>{item.description}</td>
-                      <td style={{ padding: '8px', fontSize: '14px', color: '#666' }}>{item.date}</td>
-                      <td style={{ padding: '8px', textAlign: 'right', fontSize: '14px', fontWeight: '600', color: '#E67E9F' }}>
-                        {item.amount}
+                  {dashboardData.recentExpenses.length === 0 ? (
+                    <tr>
+                      <td colSpan="3" style={{ textAlign: 'center', padding: '20px', color: '#999', fontStyle: 'italic' }}>
+                        No recent expense transactions
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    dashboardData.recentExpenses.map(item => (
+                      <tr key={item.id} style={{ borderBottom: '1px solid #F5F5F5' }}>
+                        <td style={{ padding: '8px', fontSize: '14px', color: '#333' }}>{item.description}</td>
+                        <td style={{ padding: '8px', fontSize: '14px', color: '#666' }}>{item.date}</td>
+                        <td style={{ padding: '8px', textAlign: 'right', fontSize: '14px', fontWeight: '600', color: '#E67E9F' }}>
+                          {item.amount}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -327,3 +319,5 @@ const fetchBusinessData = async () => {
 }
 
 export default BusinessDash;
+
+// Note: SubUserDash.jsx already correctly uses 'access_token' so no changes needed there
