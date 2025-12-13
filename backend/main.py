@@ -1,4 +1,3 @@
-# Your main.py should look like this:
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
@@ -28,7 +27,7 @@ app = FastAPI(title="ClariFi API", version="1.0.0")
 
 Base.metadata.create_all(bind=engine)
 
-# CORS configuration
+# configuration
 origins = [
     "http://localhost:5173",
     "http://localhost:3000",

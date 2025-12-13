@@ -3,7 +3,7 @@ from typing import Optional
 
 class CategoryBase(BaseModel):
     name: str
-    kind: str  # "income" or "expense"
+    kind: str  
     parent_id: Optional[int] = None
 
 class CategoryCreate(CategoryBase):

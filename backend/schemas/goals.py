@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from datetime import date, datetime  # <-- ADD THIS!
+from datetime import date, datetime 
 
 class GoalBase(BaseModel):
     name: str
@@ -25,7 +25,7 @@ class GoalUpdate(BaseModel):
 class GoalOut(GoalBase):
     id: int
     status: str
-    created_at: datetime  # <-- FIXED
+    created_at: datetime 
 
     class Config:
         from_attributes = True

@@ -16,8 +16,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/chatbot", tags=["Chatbot"])
 
-# ========== AGENTS IMPORT SETUP ==========
-
 def setup_agents_import():
     import inspect
 
@@ -40,21 +38,20 @@ def setup_agents_import():
     print("Agents Path:", agents_path)
     print("========================\n")
 
-    # FORCE ADD TO PATH
+    # froce add to sys.path
     if project_root not in sys.path:
         sys.path.insert(0, project_root)
 
     if agents_path not in sys.path:
         sys.path.insert(0, agents_path)
 
-    # MUST return absolute paths
+    # must return absolute paths
     return agents_path, backend_dir
 
 setup_result = setup_agents_import()
 agents_path = setup_result[0] if setup_result else None
 backend_path = setup_result[1] if setup_result else None
 
-# ========== IMPORT AGENTS ==========
 
 INTENT_CLASSIFIER_AVAILABLE = False
 IntentClassifier = None
@@ -126,7 +123,6 @@ def get_db():
     finally:
         db.close()
 
-# ========== REQUEST/RESPONSE MODELS ==========
 
 class MessageRequest(BaseModel):
     message: str
@@ -148,8 +144,6 @@ class ChatHistoryItem(BaseModel):
 class DeleteConfirmRequest(BaseModel):
     confirmation_id: str
     confirm: bool = True
-
-# ========== CHAT PROCESSOR ==========
 
 def get_chat_processor():
     """Get or create chat processor with agents"""
@@ -174,7 +168,6 @@ def get_chat_processor():
             detail=f"Failed to initialize LLM agents: {str(e)}"
         )
 
-# ========== HELPER FUNCTION TO EXTRACT RESPONSE ==========
 
 def extract_agent_response(response_data: Dict[str, Any]) -> str:
     """
@@ -194,7 +187,6 @@ def extract_agent_response(response_data: Dict[str, Any]) -> str:
     
     return str(response_text)
 
-# ========== MAIN CHATBOT ENDPOINT ==========
 
 @router.post("/message", response_model=MessageResponse)
 def handle_chatbot_message(
@@ -215,29 +207,22 @@ def handle_chatbot_message(
     try:
         logger.info(f"Processing message from user {user.id}: '{request.message}'")
         
-        # Step 1: Get the chat processor (IntentClassifier)
+        #Get IntentClassifier
         classifier = get_chat_processor()
         
-        # Step 2: Route to appropriate agent and get response
-        # The classify_intent method will:
-        # - Determine intent (VIEW/CREATE/UPDATE/DELETE)
-        # - Route to correct agent (QueryRunner or DataHandler)
-        # - Execute the query/operation
-        # - Return structured result
+        # Route to appropriate agent and get response    
         response_data = classifier.classify_intent(
             user_query=request.message,
-            user_id=user.id  # Pass user_id for security enforcement
-        )
+            user_id=user.id
         
         logger.info(f"Agent response data: {response_data}")
         
-        # Step 3: Extract the actual response text from agent result
+        # Extract actual response text from agent result
         final_response = extract_agent_response(response_data)
         
-        # Step 4: Save interaction to database (llmlogs table)
-        # This ensures each user can only see their own logs
+        #Save interaction to database (llmlogs table)
         log_entry = LLMLog(
-            user_id=user.id,  # CRITICAL: Enforces user isolation
+            user_id=user.id,
             session_id=request.session_id,
             prompt=request.message,
             response=final_response,
@@ -248,7 +233,7 @@ def handle_chatbot_message(
         
         logger.info(f"Saved log entry {log_entry.id} for user {user.id}")
         
-        # Step 5: Return response to frontend
+        #Return response to frontend
         return MessageResponse(
             response=final_response,
             session_id=request.session_id,
@@ -258,11 +243,11 @@ def handle_chatbot_message(
         )
     
     except HTTPException as e:
-        # Re-raise HTTP exceptions (like 503 Service Unavailable)
+        # Re-raise HTTP exceptions
         raise e
     
     except Exception as e:
-        # Log the error and return user-friendly message
+        # Log error and return message
         logger.error(f"Error processing message for user {user.id}: {e}", exc_info=True)
         
         # Try to save error to logs
@@ -287,7 +272,6 @@ def handle_chatbot_message(
             }
         )
 
-# ========== CHAT HISTORY ENDPOINT ==========
 
 @router.get("/history", response_model=List[ChatHistoryItem])
 def get_chat_history(
@@ -310,10 +294,10 @@ def get_chat_history(
     try:
         logger.info(f"Fetching chat history for user {user.id}")
         
-        # Build query with user_id filter (CRITICAL for security)
+        # Build query with user_id filter
         query = db.query(LLMLog).filter(LLMLog.user_id == user.id)
         
-        # Optional: Filter by session_id if provided
+        #Filter by session_id if provided
         if session_id:
             query = query.filter(LLMLog.session_id == session_id)
         
@@ -323,7 +307,6 @@ def get_chat_history(
         logger.info(f"Found {len(logs)} log entries for user {user.id}")
         
         # Format response for frontend
-        # Each log entry becomes TWO messages: user message + agent response
         history = []
         for log in logs:
             # User message
@@ -351,8 +334,6 @@ def get_chat_history(
             detail=f"Failed to fetch chat history: {str(e)}"
         )
 
-# ========== CLEAR HISTORY ENDPOINT ==========
-
 @router.delete("/history")
 def clear_chat_history(
     session_id: Optional[str] = None,
@@ -367,10 +348,10 @@ def clear_chat_history(
     try:
         logger.info(f"Clearing chat history for user {user.id}")
         
-        # Build delete query with user_id filter (CRITICAL for security)
+        # Build delete query with user_id filter
         query = db.query(LLMLog).filter(LLMLog.user_id == user.id)
         
-        # Optional: Only clear specific session
+        #Only clear specific session
         if session_id:
             query = query.filter(LLMLog.session_id == session_id)
         
@@ -394,7 +375,6 @@ def clear_chat_history(
             detail=f"Failed to clear chat history: {str(e)}"
         )
 
-# ========== DELETE CONFIRMATION ENDPOINTS ==========
 
 @router.post("/confirm-delete")
 def confirm_delete_operation(
@@ -419,7 +399,7 @@ def confirm_delete_operation(
                 raise HTTPException(status_code=503, detail="DataHandler not available")
             data_handler = DataHandler()
         
-        # Process confirmation (DataHandler enforces user_id matching)
+        # Process confirmation
         result = data_handler.confirm_delete(
             user_id=user.id,
             confirmation_id=request.confirmation_id,
@@ -476,7 +456,7 @@ def get_pending_deletes(
                 }
             data_handler = DataHandler()
         
-        # Get pending deletes (DataHandler enforces user_id matching)
+        # Get pending deletes
         result = data_handler.list_pending_deletes(user_id=user.id)
         
         return result
@@ -489,8 +469,6 @@ def get_pending_deletes(
             status_code=500,
             detail=f"Failed to fetch pending deletes: {str(e)}"
         )
-
-# ========== HEALTH CHECK ENDPOINTS ==========
 
 @router.get("/health")
 def chatbot_health_check():

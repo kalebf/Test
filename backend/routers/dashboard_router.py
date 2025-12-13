@@ -22,7 +22,6 @@ def get_db():
     finally:
         db.close()
 
-# ========== HELPER FUNCTIONS ==========
 
 def fetch_recent_purchases_helper(user_id: int, db: Session, limit: int = 10):
     """Helper function to fetch recent purchases"""
@@ -182,7 +181,6 @@ def fetch_user_goals_helper(user_id: int, db: Session):
         for i, g in enumerate(goals)
     ]
 
-# ========== API ENDPOINTS ==========
 
 @router.get("/recent-purchases")
 def get_recent_purchases_endpoint(
@@ -237,7 +235,6 @@ def get_dashboard_summary(
         "user_name": user_name
     }
 
-# ========== BUSINESS DASHBOARD ENDPOINT ==========
 
 @router.get("/business/summary")
 def get_business_dashboard_summary(
@@ -254,7 +251,6 @@ def get_business_dashboard_summary(
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
     
-    # FIX: For sub-users, get the admin's business_id to access shared business data
     business_id = user.business_id
     if not business_id:
         raise HTTPException(status_code=400, detail="User is not associated with a business")
@@ -282,7 +278,7 @@ def get_business_dashboard_summary(
     print(f"Business income category IDs: {business_income_ids}")
     print(f"Business expense category IDs: {business_expense_ids}")
     
-    # Get TOTAL BUDGET from budget_entries (the 'planned' column) - USE ADMIN'S ID
+    # Get TOTAL BUDGET from budget_entries
     budget_entry = db.query(BudgetEntry).filter(
         BudgetEntry.user_id == target_user_id
     ).first()
@@ -291,12 +287,11 @@ def get_business_dashboard_summary(
         total_budget = float(budget_entry.planned)
         print(f"Budget from budget_entries: ${total_budget}")
     else:
-        # FIX: Don't try to access total_amount since it doesn't exist
         # Just use default budget
         total_budget = 60000.0
         print(f"Using default budget: ${total_budget}")
     
-    # Calculate TOTAL EXPENSES (sum of all expense transactions) - USE ADMIN'S ID
+    # Calculate TOTAL EXPENSES
     expense_result = db.query(func.sum(Transaction.amount)).filter(
         Transaction.user_id == target_user_id,
         Transaction.category_id.in_(business_expense_ids)
@@ -305,7 +300,7 @@ def get_business_dashboard_summary(
     total_expenses = abs(float(expense_result)) if expense_result else 0.0
     print(f"Total Expenses: ${total_expenses}")
     
-    # Calculate TOTAL INCOME - USE ADMIN'S ID
+    # Calculate TOTAL INCOME
     income_result = db.query(func.sum(Transaction.amount)).filter(
         Transaction.user_id == target_user_id,
         Transaction.category_id.in_(business_income_ids)
@@ -323,7 +318,7 @@ def get_business_dashboard_summary(
     # Get current year
     current_year = datetime.now().year
     
-    # QUARTERLY INCOME DATA - Group by actual quarters - USE ADMIN'S ID
+    # QUARTERLY INCOME DATA
     quarterly_income_data = db.query(
         func.floor((extract('month', Transaction.created_at) - 1) / 3).label('quarter_num'),
         func.sum(Transaction.amount).label('total')
@@ -347,7 +342,7 @@ def get_business_dashboard_summary(
     
     print(f"Quarterly Income: {quarterly_income}")
     
-    # QUARTERLY EXPENSE DATA - Group by actual quarters - USE ADMIN'S ID
+    # QUARTERLY EXPENSE DATA
     quarterly_expense_data = db.query(
         func.floor((extract('month', Transaction.created_at) - 1) / 3).label('quarter_num'),
         func.sum(Transaction.amount).label('total')
@@ -371,13 +366,13 @@ def get_business_dashboard_summary(
     
     print(f"Quarterly Expenses: {quarterly_expenses}")
     
-    # Get recent income transactions (last 10) - USE ADMIN'S ID
+    # Get recent income transactions
     recent_income = db.query(Transaction).filter(
         Transaction.user_id == target_user_id,
         Transaction.category_id.in_(business_income_ids)
     ).order_by(desc(Transaction.created_at)).limit(10).all()
     
-    # Get recent expense transactions (last 10) - USE ADMIN'S ID
+    # Get recent expense transactions
     recent_expenses = db.query(Transaction).filter(
         Transaction.user_id == target_user_id,
         Transaction.category_id.in_(business_expense_ids)
@@ -435,7 +430,6 @@ def get_business_dashboard_summary(
     
     return response_data
 
-# ========== BUSINESS GOALS ENDPOINT ==========
 
 @router.get("/business/goals")
 def get_business_goals(
@@ -462,7 +456,7 @@ def get_business_goals(
     
     print(f"Using business admin user_id: {admin_user.id} for goals")
     
-    # Get all business goals for the admin (shared across business)
+    # Get all business goals for the admin
     goals = db.query(Goal).filter(
         Goal.user_id == admin_user.id,
         Goal.type == "business"
@@ -470,7 +464,7 @@ def get_business_goals(
     
     print(f"Found {len(goals)} business goals")
     
-    # Department color mapping (expanded for better variety)
+    # Department color mapping
     department_colors = {
         "Sales": "#7D5BA6",
         "Marketing": "#6BB577",
@@ -492,7 +486,6 @@ def get_business_goals(
     # Format goals for frontend
     formatted_goals = []
     for i, goal in enumerate(goals):
-        # Smart department assignment based on goal name keywords
         department = "General"
         goal_name_lower = goal.name.lower()
         

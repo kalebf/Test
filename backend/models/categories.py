@@ -7,7 +7,7 @@ class Category(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(String(100), unique=True, nullable=False)
-    kind = Column(String(20), nullable=False)  # "income" or "expense"
+    kind = Column(String(20), nullable=False)
     parent_id = Column(Integer, ForeignKey("categories.id"))
 
     # Self-referential relationship for subcategories

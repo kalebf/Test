@@ -48,12 +48,11 @@ def register_personal(payload: RegisterPersonal, db: Session = Depends(get_db)):
     )
     db.add(profile)
 
-    # FIX: Use hash_password function properly
-    hashed = hash_password(payload.password)  # This should work if imported correctly
+    hashed = hash_password(payload.password)
     
     creds = AuthCredentials(
         user_id=user.id,
-        password_hash=hashed,  # Make sure this is the hashed password
+        password_hash=hashed,
         failed_attempts=0,
         last_failed_at=None,
         last_login=None
@@ -91,7 +90,6 @@ def register_business_admin(payload: RegisterBusinessAdmin, db: Session = Depend
     )
     db.add(profile)
 
-    # FIX: Use hash_password function
     hashed = hash_password(payload.password)
     
     creds = AuthCredentials(
@@ -115,7 +113,7 @@ def register_business_admin(payload: RegisterBusinessAdmin, db: Session = Depend
 # In register_business_sub function:
 @router.post("/register/business_subuser")
 def register_business_sub(payload: RegisterBusinessSub, db: Session = Depends(get_db)):
-    # First, check if the business admin exists
+    # check if the business admin exists
     admin = db.query(User).filter(User.email == payload.businessemail).first()
     if not admin:
         raise HTTPException(status_code=400, detail="Business admin email not found")
@@ -148,7 +146,6 @@ def register_business_sub(payload: RegisterBusinessSub, db: Session = Depends(ge
     )
     db.add(profile)
 
-    # FIX: Use hash_password function
     hashed = hash_password(payload.password)
     
     creds = AuthCredentials(
@@ -170,38 +167,38 @@ def register_business_sub(payload: RegisterBusinessSub, db: Session = Depends(ge
 
 @router.post("/login")
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
-    print(f"Login attempt for email: {payload.email}")  # Debug log
+    print(f"Login attempt for email: {payload.email}")
     
     user = db.query(User).filter(User.email == payload.email).first()
     
     if not user:
-        print(f"User not found: {payload.email}")  # Debug log
+        print(f"User not found: {payload.email}")
         raise HTTPException(status_code=400, detail="Invalid email or password")
 
     creds = db.query(AuthCredentials).filter(AuthCredentials.user_id == user.id).first()
     
     if not creds:
-        print(f"No credentials found for user: {user.id}")  # Debug log
+        print(f"No credentials found for user: {user.id}")
         raise HTTPException(status_code=400, detail="Invalid email or password")
     
-    print(f"Found user: {user.email}, role_id: {user.role_id}")  # Debug log
+    print(f"Found user: {user.email}, role_id: {user.role_id}")
     
     # Check if role exists
     role = db.query(Role).filter(Role.id == user.role_id).first()
     if not role:
-        print(f"Role not found for role_id: {user.role_id}")  # Debug log
+        print(f"Role not found for role_id: {user.role_id}")
         raise HTTPException(status_code=400, detail="User role configuration error")
 
-    # 1. INVALID PASSWORD → increment failed_attempts
+    # 1. INVALID PASSWORD: increment failed_attempts
     if not verify_password(payload.password, creds.password_hash):
-        print(f"Password verification failed for user: {user.email}")  # Debug log
+        print(f"Password verification failed for user: {user.email}")
         creds.failed_attempts += 1
         creds.last_failed_at = datetime.utcnow()
         db.commit()
 
         raise HTTPException(status_code=400, detail="Invalid email or password")
 
-    # 2. SUCCESSFUL LOGIN → reset failed attempts + update last_login
+    # 2. SUCCESSFUL LOGIN: reset failed attempts + update last_login
     creds.failed_attempts = 0
     creds.last_failed_at = None
     creds.last_login = datetime.utcnow()
@@ -210,7 +207,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     # 3. Create token
     token = create_access_token(user.id, role.role_name)
     
-    print(f"Login successful for user: {user.email}, role: {role.role_name}")  # Debug log
+    print(f"Login successful for user: {user.email}, role: {role.role_name}")
 
     return {
         "access_token": token,
@@ -219,7 +216,6 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     }
 
 
-# Add this dependency for authentication
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
@@ -234,7 +230,6 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
-# For simplicity, let's add a simple token validation dependency
 def verify_token(
     Authorization: str = Header(None, alias="Authorization"),
     db: Session = Depends(get_db)
@@ -273,8 +268,6 @@ def verify_token(
 def debug_headers(authorization: str = Header(None)):
     return {"authorization_received": authorization}
 
-
-# Add these endpoints at the bottom of auth_router.py:
 
 @router.get("/profile")
 def get_profile(user: User = Depends(verify_token), db: Session = Depends(get_db)):
@@ -320,7 +313,7 @@ def update_personal_profile(
     db: Session = Depends(get_db)
 ):
     """Update personal user profile"""
-    # Check if email is already taken by another user
+    # Check if email is taken by another user
     if payload.email != user.email:
         email_exists = db.query(User).filter(User.email == payload.email).first()
         if email_exists:
@@ -347,7 +340,7 @@ def update_business_profile(
     db: Session = Depends(get_db)
 ):
     """Update business admin profile"""
-    # Check if email is already taken by another user
+    # Check if email is taken by another user
     if payload.email != user.email:
         email_exists = db.query(User).filter(User.email == payload.email).first()
         if email_exists:
@@ -382,7 +375,7 @@ def update_subuser_profile(
     db: Session = Depends(get_db)
 ):
     """Update business sub-user profile"""
-    # Check if email is already taken by another user
+    # Check if email is taken by another user
     if payload.email != user.email:
         email_exists = db.query(User).filter(User.email == payload.email).first()
         if email_exists:
@@ -458,10 +451,7 @@ def logout(
     db: Session = Depends(get_db)
 ):
     """Logout user by updating last login time (optional) and clearing token client-side"""
-    
-    # You could update last_logout time if you have that field
-    # For now, just return success - token invalidation is handled client-side
-    
+        
     return {
         "message": "Successfully logged out",
         "success": True

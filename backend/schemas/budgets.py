@@ -19,11 +19,9 @@ class BudgetOut(BudgetBase):
     class Config:
         from_attributes = True
 
-# Fix circular import
 try:
     from .budget_entries import BudgetEntryCreate
 except ImportError:
-    # Define a temporary class if import fails
     class BudgetEntryCreate(BaseModel):
         category_id: int
         planned: float

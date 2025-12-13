@@ -40,8 +40,7 @@ class QueryRunner:
                     "rowcount": len(data)
                 }
             else:
-                # For non-SELECT queries, return rowcount and a message
-                # Note: result.rowcount gives affected rows count
+                #return rowcount and a message for non-SELECT queries
                 affected_rows = getattr(result, "rowcount", None)
                 if affected_rows is None:
                     # Fallback if rowcount is not available
@@ -49,7 +48,7 @@ class QueryRunner:
                 return {
                     "columns": [],
                     "data": [],
-                    "rowcount": affected_rows,  # This gives the number of affected rows
+                    "rowcount": affected_rows, 
                     "message": f"Query executed successfully. {affected_rows} rows affected."
                 }
         except Exception as e:
@@ -86,9 +85,7 @@ class QueryRunner:
                     schema_info += "Columns:\n"
                 
                 nullable = " (nullable)" if is_nullable == 'YES' else ""
-                schema_info += f"  - {column_name} ({data_type}){nullable}\n"
-            
-            # Add SPECIFIC view purposes with exact column usage - UPDATED FOR YOUR SCHEMA
+                schema_info += f"  - {column_name} ({data_type}){nullable}\n"            
             schema_info += """
     VIEW PURPOSES AND EXACT USAGE:
 
@@ -161,33 +158,32 @@ class QueryRunner:
     def process_natural_language_query(self, user_query: str, user_id: int) -> Tuple[str, str]:
         """Process natural language query with two-stage approach"""
         
-        # First check if user has LLM access based on role
+        # check if user has LLM access based on role
         access_check = self._check_user_llm_access(user_id)
         if not access_check["has_access"]:
             return access_check["message"], "ACCESS_DENIED"
         
-        # Stage 1: Generate SQL to get comprehensive data from views
+        #1. Generate SQL to get comprehensive data from views
         schema_info = self._get_schema_info()
         enhanced_query = self.enhancer.enhance_query(user_query, schema_info)
         
         sql_query = self._generate_sql_query(enhanced_query, schema_info, user_id)
-        sql_query = self._clean_sql_response(sql_query) # Ensure clean SQL  
+        sql_query = self._clean_sql_response(sql_query)
 
         
-        # DEBUG: Print what we're about to execute
+        #print what we're about to execute
         print(f"DEBUG: Generated SQL: {sql_query}")
         
         try:
-            # Execute the comprehensive SQL query
             raw_data = self.execute_query(sql_query)
             
-            # DEBUG: Show what data we got
+            #show resulets
             print(f"DEBUG: Raw data columns: {raw_data.get('columns', [])}")
             print(f"DEBUG: Raw data row count: {raw_data.get('rowcount', 0)}")
             if raw_data.get('data'):
                 print(f"DEBUG: First few rows: {raw_data['data'][:3]}")
             
-            # Stage 2: Extract specific answer and generate natural response
+            # 2. Extract specific answer and generate natural response
             final_answer = self._extract_and_format_answer(
                 user_query, enhanced_query, raw_data, sql_query
             )
@@ -221,7 +217,7 @@ class QueryRunner:
             
             role_name, permission_level = user_role
             
-            # Business subusers (role_id=2) don't get LLM access
+            # Business subusers don't get LLM access
             if role_name == "business_subuser":
                 return {
                     "has_access": False, 
@@ -279,7 +275,7 @@ class QueryRunner:
         
         # Log the generated SQL for debugging
         logger.info(f"Generated SQL query for '{enhanced_query}': {sql_query}")
-        print(f"DEBUG: Generated SQL: {sql_query}")  # Temporary debug
+        print(f"DEBUG: Generated SQL: {sql_query}")
         
         return sql_query
 
@@ -321,7 +317,7 @@ class QueryRunner:
         try:
             response = self.llm.invoke(prompt).strip()
             
-            # Post-process to fix any template remnants that slipped through
+            # fix any template remnants that slipped through
             response = self._clean_template_artifacts(response)
             
             return response
@@ -333,18 +329,16 @@ class QueryRunner:
         """Clean up any template artifacts that the LLM might have left"""
         import re
         
-        # Remove common template patterns
         template_patterns = [
-            r'\$\[[^\]]+\]',  # $[amount], $[value], etc.
-            r'\[[^\]]+\]',    # [insert amount], [name], etc.
-            r'INSERT_[A-Z_]+', # INSERT_AMOUNT, INSERT_VALUE
+            r'\$\[[^\]]+\]', 
+            r'\[[^\]]+\]',    
+            r'INSERT_[A-Z_]+', 
         ]
         
         cleaned_response = response
         for pattern in template_patterns:
             cleaned_response = re.sub(pattern, '[data not available]', cleaned_response)
         
-        # If we had to clean templates, add a note
         if cleaned_response != response:
             logger.warning("Template artifacts detected and cleaned in response")
             
@@ -358,19 +352,16 @@ class QueryRunner:
         data = raw_data["data"]
         columns = raw_data["columns"]
         
-        # Extract and format money amounts directly
         money_columns = [i for i, col in enumerate(columns) 
                         if any(keyword in col.lower() for keyword in ['amount', 'total', 'sum', 'planned', 'actual'])]
         
         if money_columns:
-            # Use the first money column found
             col_idx = money_columns[0]
             values = [row[col_idx] for row in data if row[col_idx] is not None]
             if values:
                 total = sum(float(val) for val in values)
                 formatted_total = f"${total:,.2f}" if abs(total) >= 1000 else f"${total:.2f}"
                 
-                # Simple context-based response
                 query_lower = original_query.lower()
                 if any(word in query_lower for word in ['spent', 'expense', 'cost']):
                     return f"Total expenses: {formatted_total}"
@@ -413,14 +404,13 @@ class QueryRunner:
         
         summary = f"Columns: {', '.join(columns)}\n\nData:\n"
         
-        for i, row in enumerate(data[:15]):  # Limit for token management
+        for i, row in enumerate(data[:15]): 
             row_text = " | ".join([str(val) if val is not None else "NULL" for val in row])
             summary += f"Row {i+1}: {row_text}\n"
         
         if len(data) > 15:
             summary += f"\n... and {len(data) - 15} more rows"
         
-        # Add summary statistics if useful
         if data and len(columns) > 0:
             numeric_cols = [i for i, col in enumerate(columns) 
                           if any(keyword in col.lower() for keyword in ['amount', 'total', 'value', 'number', 'planned', 'actual'])]
@@ -458,19 +448,18 @@ class QueryRunner:
             validation = self.llm.invoke(validation_prompt).strip().upper()
             return "YES" in validation
         except:
-            # If validation fails, use basic heuristics
             query_lower = original_query.lower()
             response_lower = response.lower()
             
             # Basic validation rules
             if "how much" in query_lower and any(word in response_lower for word in ["$", "dollars", "amount"]):
                 return True
-            if "what is" in query_lower and len(response.split()) > 3:  # Not too short
+            if "what is" in query_lower and len(response.split()) > 3:
                 return True
             if "who" in query_lower and any(word in response_lower for word in ["name", "called", "identified"]):
                 return True
             
-            return len(response.split()) > 5  # Basic length check
+            return len(response.split()) > 5
     
     def _retry_answer_extraction(self, original_query: str, enhanced_query: str, data_summary: str) -> str:
         """Retry answer extraction with more specific guidance"""
@@ -494,7 +483,6 @@ class QueryRunner:
         """Store extracted numeric values for future context"""
         import re
         
-        # Extract numbers from response for future reference
         numbers = re.findall(r'\$?(\d+\.?\d*)', response)
         if numbers:
             self.conversation_context['last_extracted_values'] = numbers
@@ -520,7 +508,6 @@ class QueryRunner:
         
         # Simple extraction for common cases
         if len(data) == 1 and len(data[0]) == 1:
-            # Single value result
             return f"The answer is {data[0][0]}."
         elif "display_name" in columns:
             name_idx = columns.index("display_name")
@@ -532,20 +519,17 @@ class QueryRunner:
             total = sum(row[amount_idx] for row in data if row[amount_idx] is not None)
             return f"The total amount is ${total:,.2f}."
         
-        # Generic fallback
         return f"I found {len(data)} records matching your query. The most relevant information has been retrieved."
     
     def _clean_sql_response(self, sql_response: str) -> str:
         """Clean up SQL response from LLM to extract only the SQL query"""
         import re
         
-        # If it's already clean SQL, return it
         if sql_response.upper().startswith(('SELECT', 'INSERT', 'UPDATE', 'DELETE', 'WITH')):
             return sql_response.strip()
         
         # Remove markdown code blocks
         if '```sql' in sql_response and '```' in sql_response:
-            # Extract SQL from markdown code block
             start = sql_response.find('```sql')
             if start != -1:
                 start = start + 6
@@ -553,7 +537,6 @@ class QueryRunner:
                 if end != -1:
                     sql_response = sql_response[start:end].strip()
         elif '```' in sql_response:
-            # Handle generic code blocks
             start = sql_response.find('```')
             if start != -1:
                 start = start + 3

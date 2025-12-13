@@ -4,17 +4,15 @@ from langchain_ollama import OllamaLLM
 from agents.query_runner import QueryRunner
 import json
 from datetime import datetime
-# Option A: Import from backend directly with path manipulation
 import sys
 import os
 
-# Get the backend path (assuming clarifi_agent and backend are siblings)
+# Get the backend path
 backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'backend'))
 if backend_path not in sys.path:
     sys.path.insert(0, backend_path)
 
 try:
-    # Try to import settings from backend/config.py
     try:
         from backend.core.config import settings  # Try importing from backend/config.py
     except ImportError:
@@ -25,18 +23,15 @@ try:
         env_path = os.path.join(backend_path, '.env')
         load_dotenv(env_path)
 
-        # Create simple settings
+        #simple settings
         class BackendEnvSettings:
             def __init__(self):
                 self.DATABASE_URL = os.getenv("DATABASE_URL")
                 self.LLM_MODEL = os.getenv("LLM_MODEL", "default-model")
-                # Add other settings as needed
         settings = BackendEnvSettings()
 except ImportError:
-    # Fallback: use environment variables directly
     from dotenv import load_dotenv
 
-    # Load from backend/.env
     env_path = os.path.join(backend_path, '.env')
     load_dotenv(env_path)
 
@@ -44,7 +39,6 @@ except ImportError:
     class FallbackEnvSettings:
         DATABASE_URL = os.getenv("DATABASE_URL")
         LLM_MODEL = os.getenv("LLM_MODEL", "default-model")
-        # Add other settings as needed
 
     settings = FallbackEnvSettings()
 
@@ -53,7 +47,7 @@ backend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if backend_path not in sys.path:
     sys.path.insert(0, backend_path)
 try:
-    from backend.core.config import settings  # This imports from backend/config.py
+    from backend.core.config import settings
 except ImportError as e:
     print(f"Warning: Could not import from backend/config.py: {e}")
     # Fallback to environment variables
@@ -64,13 +58,12 @@ except ImportError as e:
         def __init__(self):
             self.DATABASE_URL = os.getenv("DATABASE_URL")
             self.LLM_MODEL = os.getenv("LLM_MODEL", "default-model")
-            # Add other settings as needed
 
     settings = Settings()
 
 logger = logging.getLogger(__name__)
 
-# Define tables the user is allowed to modify via NL requests
+#tables the user is allowed to modify
 ALLOWED_USER_MOD_TABLES = ['transactions','budgetentries']
 
 class DataHandler:
@@ -142,16 +135,16 @@ class DataHandler:
             sql_query = self.llm.invoke(prompt).strip()
             logger.info(f"Generated SQL: {sql_query}")
             
-            # Clean up the SQL
+            # Clean up SQL
             sql_query = sql_query.replace('```sql', '').replace('```', '').strip()
             
-            # Remove any quotes around the SQL
+            # Remove any quotes around SQL
             if sql_query.startswith('"') and sql_query.endswith('"'):
                 sql_query = sql_query[1:-1]
             elif sql_query.startswith("'") and sql_query.endswith("'"):
                 sql_query = sql_query[1:-1]
             
-            # Validate it's an INSERT statement
+            # Validate INSERT statement
             if not sql_query.upper().startswith('INSERT INTO'):
                 raise ValueError("Must be an INSERT statement")
             
@@ -174,9 +167,8 @@ class DataHandler:
                 if table_name not in ALLOWED_USER_MOD_TABLES:
                     raise ValueError(f"Cannot insert into table: {table_name}")
             
-            # For transactions, check the columns
+            # checks columns in transactions
             if 'transactions' in sql_query.lower():
-                # Check column list doesn't include id or created_at
                 col_match = re.search(r'INSERT INTO transactions\s*\((.*?)\)', sql_query, re.IGNORECASE)
                 if col_match:
                     columns = [col.strip().lower() for col in col_match.group(1).split(',')]
@@ -185,18 +177,17 @@ class DataHandler:
                     if 'created_at' in columns:
                         raise ValueError("Remove 'created_at' from transactions column list")
                     
-                    # Should have exactly: user_id, category_id, amount
                     expected = ['user_id', 'category_id', 'amount']
                     for col in expected:
                         if col not in columns:
                             raise ValueError(f"Transactions INSERT must include: {col}")
             
-            # EXECUTE THE SQL
+            # execute SQL
             try:
                 result = self.query_runner.execute_query(sql_query)
                 logger.info(f"SQL executed successfully: {result.get('message', '')}")
                 
-                # Log the interaction
+                # Log interaction
                 self.log_interaction(
                     user_id=user_id,
                     original_prompt=original_user_query,
@@ -340,26 +331,26 @@ class DataHandler:
             sql_query = self.llm.invoke(prompt).strip()
             logger.info(f"Generated DELETE SQL: {sql_query}")
             
-            # Clean up the SQL
+            # Clean SQL
             sql_query = sql_query.replace('```sql', '').replace('```', '').strip()
             
-            # Remove any quotes around the SQL
+            # Remove quotes around SQL
             if sql_query.startswith('"') and sql_query.endswith('"'):
                 sql_query = sql_query[1:-1]
             elif sql_query.startswith("'") and sql_query.endswith("'"):
                 sql_query = sql_query[1:-1]
             
-            # Validate it's a DELETE statement
+            # Validate DELETE statement
             if not sql_query.upper().startswith('DELETE FROM'):
                 raise ValueError("Must be a DELETE FROM statement")
             
-            # Check user_id is included for safety
+            # Check user_id is included
             if f"user_id = {user_id}" not in sql_query and f"user_id={user_id}" not in sql_query:
                 # Also check for IN clause or other user_id references
                 if f"WHERE user_id IN ({user_id}" not in sql_query:
                     raise ValueError(f"DELETE statement must include user_id = {user_id} for safety")
             
-            # Validate table is allowed (only transactions for now)
+            # Validate table is allowed
             import re
             table_match = re.search(r'DELETE FROM\s+(\w+)', sql_query, re.IGNORECASE)
             if table_match:
@@ -367,10 +358,10 @@ class DataHandler:
                 if table_name != 'transactions':
                     raise ValueError(f"Cannot delete from table: {table_name}. Only 'transactions' table is allowed.")
             
-            # Generate a preview of what will be deleted
+            # generates preview of what will be deleted
             preview_info = self._preview_delete(sql_query, user_id)
             
-            # Generate a unique confirmation ID
+            # generate unique confirmation ID
             import uuid
             confirmation_id = str(uuid.uuid4())[:8]
             
@@ -386,7 +377,7 @@ class DataHandler:
                 'session_id': session_id
             }
             
-            # Clean up old pending deletes (older than 10 minutes)
+            # Clean up old pending deletes
             self._cleanup_old_pending_deletes()
             
             # Return confirmation request
@@ -432,10 +423,10 @@ class DataHandler:
             original_query = delete_info['original_query']
             
             if not confirm:
-                # Cancel the delete
+                # Cancel delete
                 del self.pending_deletes[user_id][confirmation_id]
                 
-                # Log the cancellation
+                # Log cancellation
                 self.log_interaction(
                     user_id=user_id,
                     original_prompt=f"CANCELLED: {original_query}",
@@ -448,21 +439,21 @@ class DataHandler:
                     "confirmation_id": confirmation_id
                 }
             
-            # Execute the delete
+            # Execute delete
             try:
                 result = self.query_runner.execute_query(sql_query)
                 logger.info(f"DELETE executed successfully: {result.get('message', '')}")
                 
                 rowcount = result.get('rowcount', 0)
                 
-                # Log the interaction
+                # Log interaction
                 self.log_interaction(
                     user_id=user_id,
                     original_prompt=original_query,
                     response=f"CONFIRMED and executed DELETE: {sql_query} (Deleted {rowcount} rows)"
                 )
                 
-                # Clean up the pending delete
+                # Clean up pending delete
                 del self.pending_deletes[user_id][confirmation_id]
                 
                 if rowcount == 0:
@@ -481,7 +472,7 @@ class DataHandler:
             except Exception as exec_error:
                 logger.error(f"DELETE execution failed: {exec_error}")
                 
-                # Clean up the pending delete even on error
+                # Clean up pending delete even on error
                 if confirmation_id in self.pending_deletes.get(user_id, {}):
                     del self.pending_deletes[user_id][confirmation_id]
                 
@@ -514,7 +505,6 @@ class DataHandler:
             # Convert DELETE to SELECT for preview
             preview_sql = sql_query.replace('DELETE FROM', 'SELECT * FROM')
             
-            # Remove LIMIT clause for count
             count_sql = preview_sql
             if 'LIMIT' in count_sql.upper():
                 count_sql = count_sql[:count_sql.upper().index('LIMIT')].strip()
@@ -528,11 +518,10 @@ class DataHandler:
             
             record_count = count_result.get('data', [{}])[0].get('record_count', 0) if count_result.get('data') else 0
             
-            # Get sample records (first 5)
+            # Get sample records
             sample_records = []
             if preview_result.get('data'):
                 for i, record in enumerate(preview_result['data'][:5]):
-                    # Format the record nicely
                     formatted = {
                         'id': record.get('id'),
                         'amount': f"${abs(float(record.get('amount', 0))):.2f}",
@@ -541,7 +530,7 @@ class DataHandler:
                     }
                     sample_records.append(formatted)
             
-            # Generate a human-readable summary
+            # Generate human summary
             if record_count == 0:
                 message = "No records match the delete criteria."
             elif record_count == 1:
@@ -671,7 +660,7 @@ class DataHandler:
     def log_interaction(self, user_id: int, original_prompt: str, response: str):
         """Log interaction to database with proper escaping and commit"""
         try:
-            # Use parameterized query - DO NOT INCLUDE id COLUMN (it's auto-generated)
+            # Use parameterized query
             sql_query = """
             INSERT INTO llmlogs (user_id, prompt, response) 
             VALUES (:user_id, :prompt, :response)
@@ -689,7 +678,7 @@ class DataHandler:
             
         except Exception as e:
             logger.warning(f"Could not log interaction: {e}")
-            # Try to fix sequence on duplicate key error
+            # Try to fix sequence for duplicate key error
             if "duplicate key" in str(e) and "llmlogs_pkey" in str(e):
                 self._fix_llmlogs_sequence()
     
@@ -709,7 +698,7 @@ class DataHandler:
     def get_chat_history(self, user_id: int, limit: int = 50) -> List[Dict[str, Any]]:
    
         try:
-            # Use parameterized query to select only the current user's logs
+            # Use parameterized query
             sql_query = """
             SELECT id, prompt, response, timestamp 
             FROM llmlogs 
@@ -725,11 +714,10 @@ class DataHandler:
             
             result = self.query_runner.execute_query_with_params(sql_query, params)
             
-            # Format the data for the frontend
+            # Format data for frontend
             history = []
             if result.get("data"):
                 for row in result["data"]:
-                    # Unpack the row tuple
                     log_id = row[0]
                     prompt = row[1]
                     response = row[2]

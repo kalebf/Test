@@ -1,5 +1,4 @@
-# budgets.py - MAKE SURE THIS IS UPDATED
-from sqlalchemy import Column, Integer, String, Date, TIMESTAMP, ForeignKey, Float  # ADDED Float
+from sqlalchemy import Column, Integer, String, Date, TIMESTAMP, ForeignKey, Float
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from database.connection import Base
@@ -11,7 +10,7 @@ class Budget(Base):
     budget_id = Column(String(50), unique=True, nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     month = Column(Date, nullable=False)
-    total_amount = Column(Float, nullable=False, default=0.0)  # MUST HAVE THIS
+    total_amount = Column(Float, nullable=False, default=0.0)
     updated_at = Column(TIMESTAMP, server_default=func.now())
     
     # Relationships

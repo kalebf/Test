@@ -20,8 +20,8 @@ class IntentClassifier:
         self.insert_keywords = [
             'add', 'insert', 'create', 'record', 'log', 'enter', 'save',
             'new', 'make', 'set', 'establish', 'input', 'register',
-            'spent', 'bought', 'paid', 'cost', 'expense', 'purchase',  # Added spending-related keywords
-            'earned', 'made', 'received', 'income', 'got', 'gained'   # Added income-related keywords
+            'spent', 'bought', 'paid', 'cost', 'expense', 'purchase',  
+            'earned', 'made', 'received', 'income', 'got', 'gained' 
         ]
         
         self.update_keywords = [
@@ -42,7 +42,6 @@ class IntentClassifier:
             'total', 'sum', 'calculate', 'compute', 'amount of'
         ]
         
-        # Patterns that indicate spending/income (CREATE intent)
         self.spending_patterns = [
             r'(spent|paid|cost|bought)\s+\$?\d+',
             r'\$?\d+\s+(on|for)\s+\w+',
@@ -61,10 +60,9 @@ class IntentClassifier:
         Classify user intent and route to appropriate handler
         """
         try:
-            # First, check for strong spending/income patterns that indicate CREATE
             if self._is_spending_or_income_query(user_query):
                 logger.info(f"Detected spending/income pattern in query: '{user_query}'")
-                # Route directly to CREATE handler
+                # Route to CREATE handler
                 handler_result = self.data_handler.process_natural_language_create(
                     enhanced_query=user_query,
                     original_user_query=user_query,
@@ -79,16 +77,16 @@ class IntentClassifier:
                     "original_query": user_query
                 }
             
-            # Step 1: Use LLM for primary intent classification
+            # 1: Use LLM for primary intent classification
             intent_result = self._llm_classify_intent(user_query)
             
-            # Step 2: Use keyword matching as fallback/verification
+            # 2: Use keyword matching as fallback/verification
             keyword_intent = self._keyword_classify_intent(user_query)
             
-            # Step 3: Resolve conflicts and get final intent
+            # 3: Resolve conflicts and get final intent
             final_intent = self._resolve_intent_conflict(intent_result, keyword_intent)
             
-            # Step 4: Route to appropriate handler
+            # 4: Route to appropriate handler
             handler_result = self._route_to_handler(user_query, user_id, final_intent)
             
             return {
@@ -101,7 +99,6 @@ class IntentClassifier:
             
         except Exception as e:
             logger.error(f"Intent classification failed: {e}")
-            # Default to view intent on error
             return self._fallback_response(user_query, user_id)
     
     def _is_spending_or_income_query(self, user_query: str) -> bool:
@@ -118,11 +115,9 @@ class IntentClassifier:
             if re.search(pattern, query_lower):
                 return True
         
-        # Check for dollar amounts with spending context
         if re.search(r'\$?\d+(\.\d{2})?\s+(on|for)', query_lower):
             return True
         
-        # Check for "I spent/bought/paid" pattern
         if re.search(r'^i\s+(spent|bought|paid|cost)\s+', query_lower):
             return True
         
@@ -175,13 +170,12 @@ class IntentClassifier:
                 json_str = response[json_start:json_end]
                 result = json.loads(json_str)
             else:
-                # Try to parse the whole response
+                # Try to parse whole response
                 result = json.loads(response)
             
             # Validate intent
             valid_intents = ['VIEW', 'CREATE', 'UPDATE', 'DELETE']
             if result.get("intent") not in valid_intents:
-                # Default to VIEW but with low confidence
                 return {"intent": "VIEW", "confidence": 0.3, "reason": "Invalid intent from LLM"}
             
             # Ensure confidence is float
@@ -192,7 +186,6 @@ class IntentClassifier:
                 except ValueError:
                     confidence = 0.5
             
-            # Cap confidence between 0 and 1
             confidence = max(0.0, min(1.0, confidence))
             
             logger.info(f"LLM classified intent: {result['intent']} (confidence: {confidence})")
@@ -204,7 +197,6 @@ class IntentClassifier:
             
         except (json.JSONDecodeError, KeyError) as e:
             logger.warning(f"LLM classification JSON parse failed: {e}")
-            # Return default with low confidence
             return {"intent": "VIEW", "confidence": 0.3, "reason": f"JSON parse error: {str(e)}"}
         except Exception as e:
             logger.warning(f"LLM classification failed: {e}")
@@ -214,7 +206,6 @@ class IntentClassifier:
         """Classify intent using enhanced keyword matching"""
         query_lower = user_query.lower()
         
-        # First, check for strong spending/income indicators
         if self._is_spending_or_income_query(user_query):
             return "CREATE"
         
@@ -223,13 +214,11 @@ class IntentClassifier:
             return "DELETE"
         
         if any(keyword in query_lower for keyword in self.update_keywords):
-            # But not "set up" which might be CREATE
             if 'set up' in query_lower or 'setup' in query_lower:
                 return "CREATE"
             return "UPDATE"
         
         if any(keyword in query_lower for keyword in self.insert_keywords):
-            # Check if it's actually a view request with "add up" or similar
             if 'add up' in query_lower or 'total' in query_lower or 'sum' in query_lower:
                 return "VIEW"
             return "CREATE"
@@ -237,23 +226,19 @@ class IntentClassifier:
         if any(keyword in query_lower for keyword in self.view_keywords):
             return "VIEW"
         
-        # Check for dollar amounts - these are usually CREATE
         if re.search(r'\$?\d+(\.\d{2})?', query_lower):
-            # But check if it's a question about amounts
             if any(word in query_lower for word in ['how much', 'what is', 'what was']):
                 return "VIEW"
-            # Default to CREATE for statements with dollar amounts
             return "CREATE"
         
         # Default to VIEW for questions
         if any(query_lower.startswith(word) for word in ['what', 'how', 'where', 'when', 'who', 'which']):
             return "VIEW"
         
-        # Check if it's a statement (likely CREATE) vs question (likely VIEW)
         if query_lower.endswith('?') or 'can you' in query_lower or 'could you' in query_lower:
             return "VIEW"
         
-        # Statements are more likely to be CREATE
+        # Statements more likely to be CREATE
         if '.' in query_lower or query_lower.endswith('.') or len(query_lower.split()) <= 10:
             return "CREATE"
         
@@ -264,26 +249,19 @@ class IntentClassifier:
         llm_intent = llm_result["intent"]
         llm_confidence = llm_result["confidence"]
         
-        # Very low confidence LLM result - trust keyword matching
         if llm_confidence < 0.4:
             return keyword_intent
         
-        # High confidence LLM result takes precedence
         if llm_confidence >= 0.8:
             return llm_intent
         
-        # If intents match, use that
         if llm_intent == keyword_intent:
             return llm_intent
         
-        # For medium confidence conflicts, check specific cases
         if llm_intent == "VIEW" and keyword_intent == "CREATE":
-            # Special handling for spending/income queries
-            # If keyword says CREATE and LLM says VIEW, check if it has dollar amounts
             if re.search(r'\$?\d+(\.\d{2})?', keyword_intent.lower()):
                 return "CREATE"
         
-        # Default to keyword intent for medium confidence conflicts
         return keyword_intent
 
     def _route_to_handler(self, user_query: str, user_id: int, intent: str) -> Dict[str, Any]:
@@ -293,11 +271,10 @@ class IntentClassifier:
         enhanced_query = self._enhance_for_handler(user_query, intent)
         
         if intent == "CREATE":
-            # For CREATE, check if it needs to be rephrased for the data handler
             create_query = self._prepare_create_query(user_query)
             return self.data_handler.process_natural_language_create(
                 enhanced_query=enhanced_query,
-                original_user_query=create_query,  # Use prepared query
+                original_user_query=create_query,
                 user_id=user_id
             )
         
@@ -311,7 +288,7 @@ class IntentClassifier:
         elif intent == "DELETE":
             return self._handle_delete_intent(user_query, user_id)
         
-        else:  # VIEW or any other - default to query runner
+        else:  
             answer, sql = self.query_runner.process_natural_language_query(
                 user_query=user_query,
                 user_id=user_id
@@ -328,29 +305,24 @@ class IntentClassifier:
         """Prepare CREATE queries to ensure they work with data handler"""
         query_lower = user_query.lower()
         
-        # Check if query already has create keywords
         if any(word in query_lower for word in ['add', 'log', 'record', 'enter', 'save']):
             return user_query
         
-        # Check what type of CREATE it is
         if any(word in query_lower for word in ['spent', 'paid', 'bought', 'cost']):
             return f"log {user_query}"
         elif any(word in query_lower for word in ['earned', 'made', 'received', 'got', 'income']):
             return f"record {user_query}"
         else:
-            # Default to "add"
             return f"add {user_query}"
     
     def _enhance_for_handler(self, user_query: str, intent: str) -> str:
         """Enhance the query for specific handler processing"""
         if intent == "CREATE":
-            # Ensure CREATE queries include action word if missing
             query_lower = user_query.lower()
             if not any(word in query_lower for word in ['add', 'log', 'record', 'create']):
                 return f"log {user_query}"
         
         elif intent == "UPDATE":
-            # Ensure UPDATE queries include change context
             query_lower = user_query.lower()
             if not any(word in query_lower for word in ['change', 'update', 'modify']):
                 return f"change {user_query}"
@@ -366,7 +338,6 @@ class IntentClassifier:
                 user_id=user_id
             )
         except AttributeError:
-            # DataHandler might not have delete method yet
             logger.warning(f"DELETE intent not yet implemented: {user_query}")
             return {
                 "status": "ERROR",
@@ -377,7 +348,6 @@ class IntentClassifier:
     def _fallback_response(self, user_query: str, user_id: int) -> Dict[str, Any]:
         """Provide fallback response when classification fails"""
         try:
-            # Check if it looks like a CREATE query first
             if self._is_spending_or_income_query(user_query):
                 create_query = self._prepare_create_query(user_query)
                 result = self.data_handler.process_natural_language_create(
@@ -394,7 +364,6 @@ class IntentClassifier:
                     "original_query": user_query
                 }
             
-            # Otherwise try as VIEW intent
             answer, sql = self.query_runner.process_natural_language_query(
                 user_query=user_query,
                 user_id=user_id
@@ -457,7 +426,6 @@ class IntentClassifier:
             return "I'm not sure how to handle that request. Please try rephrasing."
 
 
-# Helper function for easy integration
 def get_intent_classifier() -> IntentClassifier:
     """Get a singleton instance of IntentClassifier"""
     return IntentClassifier()
